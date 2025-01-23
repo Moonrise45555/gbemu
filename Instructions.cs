@@ -12,6 +12,7 @@ namespace Execution
 
     static class Instructions
     {
+        public static bool CBprefixed;
 
         public static ushort nn;
         public static byte n;
@@ -174,10 +175,9 @@ namespace Execution
                 Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
                 return;
             }
-            Registers.r8[rr * 2] = Memory.MemRead(Registers.getr16(3));
-            Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
-            Registers.r8[rr * 2 + 1] = Memory.MemRead(Registers.getr16(3));
-            Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
+            Registers.setr16(Memory.MemRead16b(Registers.getr16(3)), rr);
+            Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+
         }
 
         public static void LDsphl()
@@ -277,7 +277,7 @@ namespace Execution
         {
             //subtracts r from A and store it in A
             //NOT OPCODED 0b10010xxx
-            Registers.SetFlags8bAdd(Registers.r8[7], (byte)-Registers.r8[yRegisterIndex], 0, "-");
+            Registers.SetFlags8bAdd(Registers.r8[7], (byte)Registers.r8[yRegisterIndex], 0, "-");
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - Registers.r8[yRegisterIndex]);
         }
@@ -286,7 +286,7 @@ namespace Execution
         {
             //subtracts [hl] from A and stores it in A
             //NOT OPCODED 0b10010110
-            Registers.SetFlags8bAdd(Registers.r8[7], (byte)-Memory.MemRead(Registers.getr16(2)), 0, "-");
+            Registers.SetFlags8bAdd(Registers.r8[7], (byte)Memory.MemRead(Registers.getr16(2)), 0, "-");
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - Memory.MemRead(Registers.getr16(2)));
         }
@@ -295,7 +295,7 @@ namespace Execution
         {
             //subtracts n from A and stores it in A
             //NOT OPCODED 0b11010110
-            Registers.SetFlags8bAdd(Registers.r8[7], (byte)-n, 0, "-");
+            Registers.SetFlags8bAdd(Registers.r8[7], (byte)n, 0, "-");
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - n);
             Registers.PC++;
@@ -306,6 +306,7 @@ namespace Execution
             //subtracts r and the carry from A and stores it in A
             //NOT OPCODED 0b1x011xxx
             byte subtractval = Registers.r8[yRegisterIndex];
+            byte CarryFlag = (byte)Registers.ReadFlag("C");
             if (yRegisterIndex == 6)
             {
                 subtractval = Memory.MemRead(Registers.getr16(2));
@@ -315,9 +316,9 @@ namespace Execution
                 subtractval = n;
                 Registers.PC++;
             }
-            Registers.SetFlags8bAdd(Registers.r8[7], (byte)-subtractval, (byte)-Registers.ReadFlag("C"), "-");
+            Registers.SetFlags8bAdd(Registers.r8[7], (byte)subtractval, (byte)CarryFlag, "-");
             Registers.SetFlag("N", 1);
-            Registers.r8[7] = (byte)(Registers.r8[7] - subtractval - Registers.ReadFlag("C"));
+            Registers.r8[7] = (byte)(Registers.r8[7] - subtractval - CarryFlag);
         }
 
 
@@ -644,7 +645,7 @@ namespace Execution
                 RLref(ref Memory.RAM[Registers.getr16(2)]);
             }
             else RLref(ref Registers.r8[yRegisterIndex]);
-            if (yRegisterIndex == 7)
+            if (yRegisterIndex == 7 && !CBprefixed)
             {
                 Registers.SetFlag("Z", 0);
             }
@@ -675,7 +676,7 @@ namespace Execution
                 RLCref(ref Memory.RAM[Registers.getr16(2)]);
             }
             else RLCref(ref Registers.r8[yRegisterIndex]);
-            if (yRegisterIndex == 7)
+            if (yRegisterIndex == 7 && !CBprefixed)
             {
                 Registers.SetFlag("Z", 0);
             }
@@ -707,7 +708,7 @@ namespace Execution
                 RRref(ref Memory.RAM[Registers.getr16(2)]);
             }
             else RRref(ref Registers.r8[yRegisterIndex]);
-            if (yRegisterIndex == 7)
+            if (yRegisterIndex == 7 && !CBprefixed)
             {
                 Registers.SetFlag("Z", 0);
             }
@@ -738,7 +739,7 @@ namespace Execution
                 RRCref(ref Memory.RAM[Registers.getr16(2)]);
             }
             else RRCref(ref Registers.r8[yRegisterIndex]);
-            if (yRegisterIndex == 7)
+            if (yRegisterIndex == 7 && !CBprefixed)
             {
                 Registers.SetFlag("Z", 0);
             }
@@ -774,6 +775,195 @@ namespace Execution
                 Registers.PC = (ushort)(Registers.PC + e);
             }
         }
+
+        public static void RET()
+        {
+            Registers.PC = Memory.MemRead16b(Registers.getr16(3));
+            Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+        }
+        public static void RETi()
+        {
+            Registers.IME = 1;
+            Registers.PC = Memory.MemRead16b(Registers.getr16(3));
+            Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+
+        }
+        public static void RETcc()
+        {
+            if (Registers.IfCondition(cc))
+            {
+                Registers.PC = Memory.MemRead16b(Registers.getr16(3));
+                Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+
+            }
+
+        }
+
+        public static void JPccnnreal()
+        {
+            Registers.PC += 2;
+            if (Registers.IfCondition(cc))
+            {
+                Registers.PC = nn;
+            }
+        }
+
+        public static void CALLnn()
+        {
+            Registers.PC += 2;
+            Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
+            Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
+            Registers.PC = nn;
+        }
+
+        public static void CALLccnn()
+        {
+            Registers.PC += 2;
+            if (Registers.IfCondition(cc))
+            {
+                Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
+                Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
+                Registers.PC = nn;
+            }
+        }
+        public static void RST()
+        {
+
+            Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
+            Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
+            Registers.PC = (ushort)(xRegisterIndex * 8);
+        }
+
+        public static void EI()
+        {
+            Registers.IME = 1;
+        }
+
+        public static void SWAPr()
+        {
+
+            Registers.SetFlag("C", 0);
+            Registers.SetFlag("N", 0);
+            Registers.SetFlag("H", 0);
+            if (yRegisterIndex == 6)
+            {
+                if (Memory.MemRead(Registers.getr16(2)) == 0)
+                {
+                    Registers.SetFlag("Z", 1);
+                }
+                else Registers.SetFlag("Z", 0);
+                Memory.MemWrite(Registers.getr16(2), (byte)(((Memory.MemRead(Registers.getr16(2)) & 0x0F) << 4) + ((Memory.MemRead(Registers.getr16(2)) & 0xF0) >> 4)));
+                return;
+            }
+            if (Registers.r8[yRegisterIndex] == 0)
+            {
+                Registers.SetFlag("Z", 1);
+            }
+            else Registers.SetFlag("Z", 0);
+
+            Registers.r8[yRegisterIndex] = (byte)(((Registers.r8[yRegisterIndex] & 0x0F) << 4) + ((Registers.r8[yRegisterIndex] & 0xF0) >> 4));
+        }
+
+        public static void SRL()
+        {
+            Registers.SetFlag("C", 0);
+            Registers.SetFlag("N", 0);
+            Registers.SetFlag("H", 0);
+            byte preshift;
+
+            if (yRegisterIndex != 6)
+            {
+                preshift = Registers.r8[yRegisterIndex];
+
+                Registers.r8[yRegisterIndex] = (byte)(Registers.r8[yRegisterIndex] >> 1);
+
+            }
+            else
+            {
+                preshift = Memory.MemRead(Registers.getr16(2));
+
+                Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) >> 1));
+            }
+            if (1 == (1 & preshift))
+            {
+                Registers.SetFlag("C", 1);
+
+            }
+            if ((preshift >> 1) == 0)
+            {
+                Registers.SetFlag("Z", 1);
+            }
+            else Registers.SetFlag("Z", 0);
+        }
+
+        public static void SLA()
+        {
+
+            Registers.SetFlag("C", 0);
+            Registers.SetFlag("N", 0);
+            Registers.SetFlag("H", 0);
+            byte preshift;
+
+            if (yRegisterIndex != 6)
+            {
+                preshift = Registers.r8[yRegisterIndex];
+
+                Registers.r8[yRegisterIndex] = (byte)(Registers.r8[yRegisterIndex] << 1);
+
+            }
+            else
+            {
+                preshift = Memory.MemRead(Registers.getr16(2));
+
+                Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) << 1));
+            }
+            if (1 == ((0b10000000 & preshift) >> 7))
+            {
+                Registers.SetFlag("C", 1);
+
+            }
+            if ((preshift << 1) == 0)
+            {
+                Registers.SetFlag("Z", 1);
+            }
+            else Registers.SetFlag("Z", 0);
+
+        }
+
+        public static void SRA()
+        {
+            Registers.SetFlag("C", 0);
+            Registers.SetFlag("N", 0);
+            Registers.SetFlag("H", 0);
+            byte preshift;
+
+            if (yRegisterIndex != 6)
+            {
+                preshift = Registers.r8[yRegisterIndex];
+
+                Registers.r8[yRegisterIndex] = (byte)(Registers.r8[yRegisterIndex] >> 1);
+                Registers.r8[yRegisterIndex] = (byte)(Registers.r8[yRegisterIndex] | ((Registers.r8[yRegisterIndex] & 0b01000000) << 1));
+
+            }
+            else
+            {
+                preshift = Memory.MemRead(Registers.getr16(2));
+
+                Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) >> 1));
+                Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) | ((Memory.MemRead(Registers.getr16(2)) & 0b01000000) << 1)));
+            }
+            if (1 == (1 & preshift))
+            {
+                Registers.SetFlag("C", 1);
+
+            }
+            if ((preshift >> 1) == 0)
+            {
+                Registers.SetFlag("Z", 1);
+            }
+            else Registers.SetFlag("Z", 0);
+        }
+
 
 
 

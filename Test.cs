@@ -80,7 +80,9 @@ public static class Tests
                 else b = 5;
                 if (b == 5)
                 {
-                    // Console.WriteLine("we failed");
+
+                    //Console.WriteLine("F Difference: " + (Registers.Flags - (byte)item.Final.F));
+                    //Console.WriteLine("nopüe");
                 }
 
 

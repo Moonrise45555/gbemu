@@ -37,15 +37,22 @@ public static class Program
         //increment Registers.PC by one
         Registers.PC++;
         byte instr = Memory.MemRead(CrntPC);
+        byte AdjInstruction = instr;
+        Instructions.CBprefixed = false;
+        if (instr == 0xCB)
+        {
+            Instructions.CBprefixed = true;
+            AdjInstruction = Memory.MemRead((ushort)(CrntPC + 1));
+        }
         int opcode = (0b11000000 & instr) >> 6;
-        Instructions.yRegisterIndex = 0b00000111 & instr;
-        Instructions.xRegisterIndex = (0b00111000 & instr) >> 3;
+        Instructions.yRegisterIndex = 0b00000111 & AdjInstruction;
+        Instructions.xRegisterIndex = (0b00111000 & AdjInstruction) >> 3;
         Instructions.rrIndex = Instructions.xRegisterIndex >> 1;
         int yRegisterIndex = Instructions.yRegisterIndex;
         int xRegisterIndex = Instructions.xRegisterIndex;
         Instructions.n = Memory.MemRead((ushort)(CrntPC + 1));
         Instructions.e = (sbyte)Instructions.n;
-        Instructions.instr = instr;
+        Instructions.instr = AdjInstruction;
         Instructions.nn = (ushort)((Memory.MemRead((ushort)(CrntPC + 1))) | ((Memory.MemRead((ushort)(CrntPC + 2)) << 8)));
         Instructions.cc = Instructions.xRegisterIndex & 0b011;
         switch (opcode)
@@ -56,6 +63,7 @@ public static class Program
                 {
                     Instructions.JPccnn();
                 }
+
                 switch (instr)
                 {
 
@@ -155,7 +163,30 @@ public static class Program
                 break;
 
             case 0b11:
-
+                switch (instr & 0x0F)
+                {
+                    case 1:
+                        Instructions.pop();
+                        break;
+                    case 0b101:
+                        Instructions.push();
+                        break;
+                }
+                switch (instr & 0b00000111)
+                {
+                    case 0b000:
+                        Instructions.RETcc();
+                        break;
+                    case 0b010:
+                        Instructions.JPccnnreal();
+                        break;
+                    case 0b100:
+                        Instructions.CALLccnn();
+                        break;
+                    case 0b111:
+                        Instructions.RST();
+                        break;
+                }
                 switch (instr)
                 {
                     case 0b11000110:
@@ -191,19 +222,80 @@ public static class Program
                     case 0b11110011:
                         Instructions.DI();
                         break;
+                    case 0b11001001:
+                        Instructions.RET();
+                        break;
+                    case 0b11011001:
+                        Instructions.RETi();
+                        break;
+                    case 0b11001101:
+                        Instructions.CALLnn();
+                        break;
+                    case 0b11100010:
+                        Instructions.LDHca();
+                        break;
+                    case 0b11100000:
+                        Instructions.LDHna();
+                        break;
+                    case 0b11101010:
+                        Instructions.LDnna();
+                        break;
+                    case 0b11110010:
+                        Instructions.LDHac();
+                        break;
+                    case 0b11110000:
+                        Instructions.LDHan();
+                        break;
+                    case 0b11111010:
+                        Instructions.ldann();
+                        break;
+                    case 0b11101000:
+                        Instructions.ADDspe();
+                        break;
+                    case 0b11111000:
+                        Instructions.AdjustedStack();
+                        break;
+                    case 0b11111001:
+                        Instructions.LDsphl();
+                        break;
+                    case 0b11111011:
+                        Instructions.EI();
+                        break;
+
                     case 0xCB:
+                        Registers.PC++;
                         switch (Instructions.n >> 3)
                         {
                             case 0b00010:
-                                Instructions.instr = Instructions.n;
+
                                 Instructions.RL();
                                 break;
                             case 0b00011:
-                                Instructions.instr = Instructions.n;
+
                                 Instructions.RR();
                                 break;
+                            case 0b00000:
+
+                                Instructions.RLC();
+                                break;
+                            case 0b00001:
+
+                                Instructions.RRC();
+                                break;
+                            case 0b00100:
+                                Instructions.SLA();
+                                break;
+                            case 0b00101:
+                                Instructions.SRA();
+                                break;
+                            case 0b00110:
+                                Instructions.SWAPr();
+                                break;
+                            case 0b00111:
+                                Instructions.SRL();
+                                break;
                         }
-                        Instructions.RL();
+
                         break;
 
                 }

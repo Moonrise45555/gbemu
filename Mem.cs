@@ -33,24 +33,24 @@ namespace EmuMemory
 
             int a = (operand1 + operand2 + operand3);
 
-            sbyte abyte = 1;
-            sbyte ahalfadd = 1;
+            int abyte = 1;
+            int ahalfadd = 1;
             int halfadd = (operand1 & 0x0F) + (operand2 & 0x0F) + (operand3 & 0x0F);
             if (SubMode == "-")
             {
-                abyte = (sbyte)(operand1 - operand2 - operand3);
-                ahalfadd = (sbyte)((operand1 & 0x0F) - (operand2 & 0x0F) - (operand3 & 0x0F));
+                abyte = (operand1 - operand2 - operand3);
+                ahalfadd = ((operand1 & 0x0F) - (operand2 & 0x0F) - (operand3 & 0x0F));
                 a = 1;
                 halfadd = 1;
 
             }
-            if ((byte)a == 0 || abyte == 0)
+            if ((byte)a == 0 || (byte)abyte == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
 
             Registers.SetFlag("N", 0);
 
-            if (a > byte.MaxValue || abyte < 0)
+            if (a > byte.MaxValue || abyte < 0 || abyte > byte.MaxValue)
                 Registers.SetFlag("C", 1);
             else Registers.SetFlag("C", 0);
 
@@ -168,6 +168,11 @@ namespace EmuMemory
         public static void MemWrite(ushort index, byte Data)
         {
             RAM[index] = Data;
+        }
+
+        public static ushort MemRead16b(ushort address)
+        {
+            return (ushort)(RAM[address] + (RAM[address + 1] << 8));
         }
     }
 
