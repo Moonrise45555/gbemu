@@ -47,9 +47,15 @@ public static class Program
         Instructions.e = (sbyte)Instructions.n;
         Instructions.instr = instr;
         Instructions.nn = (ushort)((Memory.MemRead((ushort)(CrntPC + 1))) | ((Memory.MemRead((ushort)(CrntPC + 2)) << 8)));
+        Instructions.cc = Instructions.xRegisterIndex & 0b011;
         switch (opcode)
         {
+
             case 0b00:
+                if ((instr | 0b00011000) == 0b00111000)
+                {
+                    Instructions.JPccnn();
+                }
                 switch (instr)
                 {
 
@@ -202,7 +208,7 @@ public static class Program
 
                 }
                 break;
-            case 0x10:
+            case 0b10:
 
 
                 switch (instr >> 3)

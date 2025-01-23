@@ -5,11 +5,34 @@ namespace EmuMemory
         public static byte IME = 0;
         public static ushort PC;
         public static byte Flags = 0;
+
+        public static bool IfCondition(int ConditionIndex)
+        {
+
+            switch (ConditionIndex)
+            {
+                case 3:
+                    if (ReadFlag("C") == 1)
+                    {
+                        return true;
+                    }
+                    else return false;
+
+                case 2:
+                    return ReadFlag("C") != 1;
+                case 1:
+                    return ReadFlag("Z") == 1;
+                case 0:
+                    return ReadFlag("Z") != 1;
+            }
+            throw new Exception();
+        }
         public static void SetFlags8bAdd(byte operand1, byte operand2, byte operand3 = 0, string SubMode = "+")
         {
 
 
-            byte a = (byte)(operand1 + operand2 + operand3);
+            int a = (operand1 + operand2 + operand3);
+
             sbyte abyte = 1;
             sbyte ahalfadd = 1;
             int halfadd = (operand1 & 0x0F) + (operand2 & 0x0F) + (operand3 & 0x0F);
@@ -21,7 +44,7 @@ namespace EmuMemory
                 halfadd = 1;
 
             }
-            if (a == 0 || abyte == 0)
+            if ((byte)a == 0 || abyte == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
 

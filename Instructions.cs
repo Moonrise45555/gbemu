@@ -21,6 +21,8 @@ namespace Execution
         public static int rrIndex;
         public static int yRegisterIndex;
 
+        public static int cc;
+
 
         public static void NOP()
         {
@@ -75,7 +77,13 @@ namespace Execution
 
         public static void LDmema()
         {
-            Registers.r8[7] = Memory.MemRead(Registers.getr16(rrIndex));
+            if (rrIndex == 3)
+            {
+                Registers.r8[7] = Memory.MemRead(Registers.getr16(2));
+                //redirect to HL instead of SP
+            }
+            else
+                Registers.r8[7] = Memory.MemRead(Registers.getr16(rrIndex));
             if (rrIndex == 3)
                 Registers.setr16((ushort)(Registers.getr16(2) - 1), 2);
             if (rrIndex == 2)
@@ -83,7 +91,13 @@ namespace Execution
         }
         public static void LDamem()
         {
-            Memory.MemWrite(Registers.getr16(rrIndex), Registers.r8[7]);
+            if (rrIndex == 3)
+            {
+                Memory.MemWrite(Registers.getr16(2), Registers.r8[7]);
+                //redirect to HL instead of SP
+            }
+            else
+                Memory.MemWrite(Registers.getr16(rrIndex), Registers.r8[7]);
             if (rrIndex == 3)
                 Registers.setr16((ushort)(Registers.getr16(2) - 1), 2);
             if (rrIndex == 2)
@@ -100,13 +114,15 @@ namespace Execution
             Memory.MemWrite(Registers.getr16(1), Registers.r8[7]);
         }
 
-        public static void LDhln()
-        {
-            Memory.MemWrite(Registers.getr16(2), n);
-            Registers.PC++;
-        }
+
         public static void LDrn()
         {
+            if (xRegisterIndex == 6)
+            {
+                Memory.MemWrite(Registers.getr16(2), n);
+                Registers.PC++;
+                return;
+            }
             Registers.r8[xRegisterIndex] = n;
             Registers.PC++;
         }
@@ -241,7 +257,8 @@ namespace Execution
         {
             //adds r and the carry flag to A and stores it in A
             //NOT OPCODED 0b10001xxx
-            byte addvalue = Registers.r8[yRegisterIndex];
+            byte addvalue = (byte)(Registers.r8[yRegisterIndex]);
+            byte CarryFlag = (byte)Registers.ReadFlag("C");
             if (yRegisterIndex == 6)
             {
                 addvalue = Memory.MemRead(Registers.getr16(2));
@@ -251,8 +268,8 @@ namespace Execution
                 addvalue = n;
                 Registers.PC++;
             }
-            Registers.SetFlags8bAdd(Registers.r8[7], addvalue, (byte)Registers.ReadFlag("C"));
-            Registers.r8[7] = (byte)(Registers.r8[7] + addvalue + Registers.ReadFlag("C"));
+            Registers.SetFlags8bAdd(Registers.r8[7], addvalue, CarryFlag);
+            Registers.r8[7] = (byte)(Registers.r8[7] + addvalue + CarryFlag);
         }
 
 
@@ -334,6 +351,11 @@ namespace Execution
 
         public static void INCr()
         {
+            if (xRegisterIndex == 6)
+            {
+                INChl();
+                return;
+            }
             //increments data in R
             //NOT OPCODED 0b00xxx100
             int c = Registers.ReadFlag("C");
@@ -345,11 +367,29 @@ namespace Execution
 
         public static void DECr()
         {
+            if (xRegisterIndex == 6)
+            {
+                DEChl();
+                return;
+            }
             //increments data in R
             //NOT OPCODED 0b00xxx100
             int c = Registers.ReadFlag("C");
             Registers.SetFlags8bAdd(Registers.r8[xRegisterIndex], 1, 0, "-");
             Registers.r8[xRegisterIndex] = (byte)(Registers.r8[xRegisterIndex] - 1);
+            Registers.SetFlag("C", c);
+            Registers.SetFlag("N", 1);
+
+        }
+
+        public static void DEChl()
+        {
+
+            //increments data in R
+            //NOT OPCODED 0b00xxx100
+            int c = Registers.ReadFlag("C");
+            Registers.SetFlags8bAdd(Memory.MemRead(Registers.getr16(2)), 1, 0, "-");
+            Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) - 1));
             Registers.SetFlag("C", c);
             Registers.SetFlag("N", 1);
 
@@ -489,29 +529,28 @@ namespace Execution
             //DAA
             //BROKEN
             int c = 0;
-            if (Registers.ReadFlag("N") == 0)
-            {
+            int offset = 0;
 
-                if ((Registers.r8[7] & 0x0F) > 9)
-                {
-                    Registers.r8[7] += 0x06;
-                }
-                else
-                if (Registers.r8[7] > 0x99)
-                {
-                    c = 1;
-                    Registers.r8[7] += 0x60;
-                }
+
+            if ((Registers.ReadFlag("N") == 0 && (Registers.r8[7] & 0x0F) > 9) || Registers.ReadFlag("H") == 1)
+            {
+                offset += 0x06;
             }
-            if (Registers.ReadFlag("C") == 1)
+
+            if ((Registers.ReadFlag("N") == 0 && Registers.r8[7] > 0x99) || Registers.ReadFlag("C") == 1)
             {
                 c = 1;
-                Registers.r8[7] += 0x60;
+                offset += 0x60;
             }
-            if (Registers.ReadFlag("H") == 1)
+
+
+
+            if (Registers.ReadFlag("N") == 1)
             {
-                Registers.r8[7] += 0x06;
+                Registers.r8[7] = (byte)(Registers.r8[7] - offset);
             }
+            else Registers.r8[7] = (byte)(Registers.r8[7] + offset);
+
 
             if (Registers.r8[7] == 0)
             {
@@ -549,7 +588,7 @@ namespace Execution
         {
             //adds HL to RR and stores it back in HL
             //NOT OPCODED 0b00xx1001
-            ushort sum = (ushort)(Registers.getr16(2) + Registers.getr16(rrIndex));
+            int sum = (Registers.getr16(2) + Registers.getr16(rrIndex));
             //manually setting flags since i believe? its not needed anywhere else
             Registers.SetFlag("N", 0);
             if (sum > ushort.MaxValue || sum < 0)
@@ -557,12 +596,14 @@ namespace Execution
                 Registers.SetFlag("C", 1);
             }
             else Registers.SetFlag("C", 0);
-            ushort halfsum = (ushort)(Registers.getr16(2) & 0x0FFF + Registers.getr16(rrIndex) & 0x0FFF);
-            if (halfsum > 0x1000)
+            int halfsum = (Registers.getr16(2) & 0x0FFF) + (Registers.getr16(rrIndex) & 0x0FFF);
+            if (halfsum > 0x0FFF)
             {
                 Registers.SetFlag("H", 1);
             }
             else Registers.SetFlag("H", 0);
+
+            Registers.setr16((ushort)sum, 2);
         }
 
         public static void ADDspe()
@@ -705,6 +746,7 @@ namespace Execution
 
         public static void JP()
         {
+            Registers.PC += 2;
             Registers.PC = nn;
         }
 
@@ -715,12 +757,22 @@ namespace Execution
 
         public static void JRe()
         {
-            Registers.PC = (byte)(Registers.PC + e);
+            Registers.PC++;
+            Registers.PC = (ushort)(Registers.PC + e);
         }
 
         public static void DI()
         {
             Registers.IME = 0;
+        }
+
+        public static void JPccnn()
+        {
+            Registers.PC += 1;
+            if (Registers.IfCondition(cc))
+            {
+                Registers.PC = (ushort)(Registers.PC + e);
+            }
         }
 
 
