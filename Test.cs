@@ -11,7 +11,7 @@ public static class Tests
 
     public static void RunTests()
     {
-        //improvised testing, very ugly
+        //improvised testing, very ugly 11011001
         int total = 0;
         int passed = 0;
         foreach (string s in Directory.GetFiles("../../../../../Downloads/sm83-main/sm83-main/v1"))
@@ -52,7 +52,7 @@ public static class Tests
                     Program.Execute(Registers.PC);
                 }
                 int b = 6;
-                if (Registers.IME == (byte)item.Initial.Ime &&
+                if (Registers.IME == (byte)item.Final.Ime &&
                     Registers.r8[0] == (byte)item.Final.B &&
                     Registers.r8[1] == (byte)item.Final.C &&
                     Registers.r8[2] == (byte)item.Final.D &&
@@ -81,8 +81,8 @@ public static class Tests
                 if (b == 5)
                 {
 
-                    //Console.WriteLine("F Difference: " + (Registers.Flags - (byte)item.Final.F));
-                    //Console.WriteLine("nopüe");
+                    Console.WriteLine("F Difference: " + (Registers.Flags - (byte)item.Final.F));
+                    Console.WriteLine("nopüe");
                 }
 
 

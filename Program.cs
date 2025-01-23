@@ -175,10 +175,17 @@ public static class Program
                 switch (instr & 0b00000111)
                 {
                     case 0b000:
-                        Instructions.RETcc();
+                        if (instr == 0b11100000)
+                        {
+                            Instructions.LDHna();
+                        }
+                        else
+                        if (instr != 0b11101000 && instr != 0b11110000 && instr != 0b1111001 && instr != 0b11110010 && instr != 0b11111000)
+                            Instructions.RETcc();
                         break;
                     case 0b010:
-                        Instructions.JPccnnreal();
+                        if (instr != 0b11100010 && instr != 0b11101010 && instr != 0b11110010 && instr != 0b11111010)
+                            Instructions.JPccnnreal();
                         break;
                     case 0b100:
                         Instructions.CALLccnn();
@@ -235,7 +242,7 @@ public static class Program
                         Instructions.LDHca();
                         break;
                     case 0b11100000:
-                        Instructions.LDHna();
+                        //Instructions.LDHna();
                         break;
                     case 0b11101010:
                         Instructions.LDnna();
@@ -264,6 +271,18 @@ public static class Program
 
                     case 0xCB:
                         Registers.PC++;
+                        switch (AdjInstruction >> 6)
+                        {
+                            case 0b01:
+                                Instructions.BITur();
+                                break;
+                            case 0b10:
+                                Instructions.RESETur();
+                                break;
+                            case 0b11:
+                                Instructions.SETur();
+                                break;
+                        }
                         switch (Instructions.n >> 3)
                         {
                             case 0b00010:

@@ -155,8 +155,8 @@ namespace Execution
             int rr = rrIndex;
             if (rr == 3)
             {
-                Memory.MemWrite(Registers.getr16(3), Registers.r8[7]);
-                Memory.MemWrite((ushort)(Registers.getr16(3) + 1), Registers.Flags);
+                Memory.MemWrite((ushort)(Registers.getr16(3) + 1), Registers.r8[7]);
+                Memory.MemWrite((ushort)(Registers.getr16(3)), Registers.Flags);
             }
             else
                 Memory.MemWrite16b(Registers.getr16(3), Registers.getr16(rr));
@@ -169,9 +169,10 @@ namespace Execution
             if (rr == 3)
             {
                 //if the register to reach is the 4th one, redirect to AF instead of the stack pointer
-                Registers.r8[7] = Memory.MemRead(Registers.getr16(3));
-                Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
                 Registers.Flags = Memory.MemRead(Registers.getr16(3));
+                Registers.Flags = (byte)(Registers.Flags & 0xF0);
+                Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
+                Registers.r8[7] = Memory.MemRead(Registers.getr16(3));
                 Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
                 return;
             }
@@ -182,7 +183,7 @@ namespace Execution
 
         public static void LDsphl()
         {
-            Registers.setr16(Registers.getr16(3), 3);
+            Registers.setr16(Registers.getr16(2), 3);
         }
 
         public static void ldann()
@@ -243,10 +244,27 @@ namespace Execution
         }
         public static void AdjustedStack()
         {
-            //write n + sp (n being a signed integer) to HL
+            //adds signed operand e to sp and stores it in sp
+            //NOT OPCODED 11101000
+            Registers.SetFlag("Z", 0);
+            Registers.SetFlag("N", 0);
+            if ((n + (0xFF & Registers.getr16(3))) > Byte.MaxValue)
 
-            Registers.SetFlags8bAdd((byte)e, (byte)(Registers.getr16(3) & 0x00FF));
-            Registers.setr16((ushort)(n + Registers.getr16(3)), 2);
+            {
+                Registers.SetFlag("C", 1);
+            }
+            else Registers.SetFlag("C", 0);
+
+            if (((e & 0x0F) + (Registers.getr16(3) & 0x000F)) > 0xF || 0 > ((e & 0x0F) + (Registers.getr16(3) & 0x0F)))
+
+            {
+                Registers.SetFlag("H", 1);
+            }
+            else Registers.SetFlag("H", 0);
+
+
+            Registers.setr16((ushort)(e + Registers.getr16(3)), 2);
+
 
             Registers.PC++;
         }
@@ -611,8 +629,25 @@ namespace Execution
         {
             //adds signed operand e to sp and stores it in sp
             //NOT OPCODED 11101000
-            Registers.SetFlags8bAdd((byte)e, (byte)(Registers.getr16(3) & 0x00FF));
+            Registers.SetFlag("Z", 0);
+            Registers.SetFlag("N", 0);
+            if ((n + (0xFF & Registers.getr16(3))) > Byte.MaxValue)
+
+            {
+                Registers.SetFlag("C", 1);
+            }
+            else Registers.SetFlag("C", 0);
+
+            if (((e & 0x0F) + (Registers.getr16(3) & 0x000F)) > 0xF || 0 > ((e & 0x0F) + (Registers.getr16(3) & 0x0F)))
+
+            {
+                Registers.SetFlag("H", 1);
+            }
+            else Registers.SetFlag("H", 0);
+
+
             Registers.setr16((ushort)(e + Registers.getr16(3)), 3);
+
 
             Registers.PC++;
         }
@@ -836,7 +871,7 @@ namespace Execution
 
         public static void EI()
         {
-            Registers.IME = 1;
+            //Registers.IME = 1;
         }
 
         public static void SWAPr()
@@ -889,7 +924,7 @@ namespace Execution
                 Registers.SetFlag("C", 1);
 
             }
-            if ((preshift >> 1) == 0)
+            if ((byte)(preshift >> 1) == 0)
             {
                 Registers.SetFlag("Z", 1);
             }
@@ -922,7 +957,7 @@ namespace Execution
                 Registers.SetFlag("C", 1);
 
             }
-            if ((preshift << 1) == 0)
+            if ((byte)(preshift << 1) == 0)
             {
                 Registers.SetFlag("Z", 1);
             }
@@ -957,11 +992,58 @@ namespace Execution
                 Registers.SetFlag("C", 1);
 
             }
-            if ((preshift >> 1) == 0)
+            if ((byte)(preshift >> 1) == 0)
             {
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+        }
+
+        public static void BITur()
+        {
+            byte CheckValue = Registers.r8[yRegisterIndex];
+            if (yRegisterIndex == 6)
+            {
+                CheckValue = Memory.MemRead(Registers.getr16(2));
+            }
+            Registers.SetFlag("N", 0);
+            Registers.SetFlag("H", 1);
+            byte a = (byte)(7 - xRegisterIndex);
+            a = (byte)(CheckValue << a);
+            a = (byte)(a >> 7);
+            a = (byte)(1 - a);
+            Registers.SetFlag("Z", a);
+        }
+
+        public static void SETur()
+        {
+
+            byte bitmask = (byte)(1 << xRegisterIndex);
+
+
+            byte CheckValue = Registers.r8[yRegisterIndex];
+            if (yRegisterIndex == 6)
+            {
+                Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) | bitmask));
+            }
+            else Registers.r8[yRegisterIndex] |= bitmask;
+
+
+
+        }
+
+        public static void RESETur()
+        {
+            byte bitmask = (byte)~(1 << xRegisterIndex);
+
+
+            byte CheckValue = Registers.r8[yRegisterIndex];
+            if (yRegisterIndex == 6)
+            {
+                Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) & bitmask));
+            }
+            else Registers.r8[yRegisterIndex] &= bitmask;
+
         }
 
 
