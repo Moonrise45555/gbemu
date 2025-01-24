@@ -167,7 +167,19 @@ namespace EmuMemory
 
         public static void MemWrite(ushort index, byte Data)
         {
+            if (index == 0xFF46)
+            {
+                OAMDMATransfer(Data);
+            }
             RAM[index] = Data;
+        }
+
+        public static void OAMDMATransfer(byte source)
+        {
+            for (var i = 0; i < 0xA0; i++)
+            {
+                RAM[0xFE00 + i] = RAM[i + (source << 8)];
+            }
         }
 
         public static ushort MemRead16b(ushort address)

@@ -14,6 +14,8 @@ using EmuMemory;
 using Execution;
 using System.ComponentModel;
 using QuickType;
+using Raylib_cs;
+using Rendering;
 
 public static class Program
 {
@@ -24,7 +26,74 @@ public static class Program
 
     static void Main(string[] args)
     {
-        Tests.RunTests();
+        Raylib.InitWindow(256, 256, "mario for thie wii?");
+
+        Registers.PC = 0x0;
+
+        byte[] a = File.ReadAllBytes("../../../dmg0_boot.bin");
+        for (var i = 0; i < a.Length; i++)
+        {
+            Memory.RAM[i] = a[i];
+        }
+        long cycle = 0;
+        while (true)
+        {
+
+            if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.B))
+            {
+                if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.C))
+                {
+                    for (var i = 0; i < (0x97FF - 0x8000); i++)
+                    {
+                        Console.Write(Memory.MemRead((ushort)(0x8000 + i)).ToString("X2") + " ");
+                        if (i % 0x10 == 0)
+                        {
+                            Console.WriteLine();
+                        }
+
+
+
+
+
+                    }
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    throw new Exception();
+                }
+                for (var i = 0; i < (0x9bff - 0x9800); i++)
+                {
+                    Console.Write(Memory.MemRead((ushort)(0x9800 + i)).ToString("X2") + " ");
+                    if (i % 0x20 == 0)
+                    {
+                        Console.WriteLine();
+                    }
+
+
+
+
+
+                }
+                Console.WriteLine();
+                Console.WriteLine();
+                Console.WriteLine();
+                throw new Exception();
+            }
+            cycle++;
+
+
+            Execute(Registers.PC);
+
+            if (cycle % 10000 == 0)
+            {
+                Console.WriteLine(Registers.PC.ToString("X4"));
+                PPU.RenderLoop();
+
+            }
+
+
+        }
+
 
 
 
@@ -33,8 +102,27 @@ public static class Program
     }
     public static void Execute(ushort CrntPC)
     {
+
+        if (((Memory.MemRead(0xFF0F) & 1) == 1))
+        {
+            Registers.IME = 0;
+            Memory.MemWrite(0xFF0F, (byte)(Memory.MemRead(0xFF0F) & 0xFE));
+
+            Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
+
+            Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
+            CrntPC = 0x40;
+            Registers.PC = 0x40;
+
+
+        }
+
         //fetch instruction from memory
         //increment Registers.PC by one
+        if (CrntPC == 0x0024)
+        {
+
+        }
         Registers.PC++;
         byte instr = Memory.MemRead(CrntPC);
         byte AdjInstruction = instr;
@@ -55,6 +143,8 @@ public static class Program
         Instructions.instr = AdjInstruction;
         Instructions.nn = (ushort)((Memory.MemRead((ushort)(CrntPC + 1))) | ((Memory.MemRead((ushort)(CrntPC + 2)) << 8)));
         Instructions.cc = Instructions.xRegisterIndex & 0b011;
+        //Console.WriteLine("executing " + instr.ToString("X4"));
+
         switch (opcode)
         {
 

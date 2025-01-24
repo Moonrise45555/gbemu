@@ -871,7 +871,7 @@ namespace Execution
 
         public static void EI()
         {
-            //Registers.IME = 1;
+            Registers.IME = 1;
         }
 
         public static void SWAPr()
