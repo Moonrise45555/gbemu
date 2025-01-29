@@ -28,53 +28,29 @@ namespace Execution
         public static void NOP()
         {
             //nop, what do you expect?
+            Program.Tick();
         }
-        public static void LoadFromBCToA()
-        {
-            //loads byte from [BC] to A 
-            Registers.r8[7] = Memory.MemRead(Registers.getr16(0));
-        }
+
 
         public static void LDrrnn()
         {
             //loads nn into the specified register
             Registers.setr16(nn, rrIndex);
             Registers.PC += 2;
+            Program.Tick(3);
         }
 
         public static void LDnnsp()
         {
             //loads data from SP register to [nn]
-            //TODO:STACK REGISTER 
+
             Memory.MemWrite16b(nn, Registers.getr16(3));
             Registers.PC += 2;
+            Program.Tick(5);
         }
 
-        public static void LDhlda()
-        {
-            //loads A to [hl] then decrements hl
-            Memory.MemWrite(Registers.getr16(2), Registers.r8[7]);
-            Registers.setr16((ushort)(Registers.getr16(2) - 1), 2);
-        }
 
-        public static void LDahld()
-        {
-            //loads [hl] to a then decrements hl
-            Registers.r8[7] = Memory.MemRead(Registers.getr16(2));
-            Registers.setr16((ushort)(Registers.getr16(2) - 1), 2);
-        }
-        public static void LDhlia()
-        {
-            //loads A to [hl] then decrements hl
-            Memory.MemWrite(Registers.getr16(2), Registers.r8[7]);
-            Registers.setr16((ushort)(Registers.getr16(2) + 1), 2);
-        }
-        public static void LDahli()
-        {
-            //loads [hl] to a then decrements hl
-            Registers.r8[7] = Memory.MemRead(Registers.getr16(2));
-            Registers.setr16((ushort)(Registers.getr16(2) + 1), 2);
-        }
+
 
         public static void LDmema()
         {
@@ -89,6 +65,7 @@ namespace Execution
                 Registers.setr16((ushort)(Registers.getr16(2) - 1), 2);
             if (rrIndex == 2)
                 Registers.setr16((ushort)(Registers.getr16(2) + 1), 2);
+            Program.Tick(2);
         }
         public static void LDamem()
         {
@@ -103,17 +80,10 @@ namespace Execution
                 Registers.setr16((ushort)(Registers.getr16(2) - 1), 2);
             if (rrIndex == 2)
                 Registers.setr16((ushort)(Registers.getr16(2) + 1), 2);
+            Program.Tick(2);
         }
 
-        public static void LDbca()
-        {
-            Memory.MemWrite(Registers.getr16(0), Registers.r8[7]);
-        }
 
-        public static void LDdea()
-        {
-            Memory.MemWrite(Registers.getr16(1), Registers.r8[7]);
-        }
 
 
         public static void LDrn()
@@ -121,11 +91,14 @@ namespace Execution
             if (xRegisterIndex == 6)
             {
                 Memory.MemWrite(Registers.getr16(2), n);
+                Program.Tick(3);
                 Registers.PC++;
                 return;
             }
             Registers.r8[xRegisterIndex] = n;
+            Program.Tick(2);
             Registers.PC++;
+            Program.Tick(2);
         }
 
         public static void LDgeneral()
@@ -134,18 +107,21 @@ namespace Execution
             {
                 if (xRegisterIndex == 6)
                 {
-                    //HALT
+                    Program.Halted = true;
+                    Program.Tick();
                     return;
                 }
                 //load to register
                 Registers.r8[xRegisterIndex] = Memory.MemRead(Registers.getr16(2));
+                Program.Tick(2);
             }
             else if (xRegisterIndex == 6)
             {
                 //load from register
                 Memory.MemWrite(Registers.getr16(2), Registers.r8[yRegisterIndex]);
+                Program.Tick(2);
             }
-            else Registers.r8[xRegisterIndex] = Registers.r8[yRegisterIndex];
+            else { Registers.r8[xRegisterIndex] = Registers.r8[yRegisterIndex]; Program.Tick(); }
         }
 
         public static void push()
@@ -160,6 +136,7 @@ namespace Execution
             }
             else
                 Memory.MemWrite16b(Registers.getr16(3), Registers.getr16(rr));
+            Program.Tick(4);
 
         }
 
@@ -174,16 +151,19 @@ namespace Execution
                 Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
                 Registers.r8[7] = Memory.MemRead(Registers.getr16(3));
                 Registers.setr16((ushort)(Registers.getr16(3) + 1), 3);
+                Program.Tick(3);
                 return;
             }
             Registers.setr16(Memory.MemRead16b(Registers.getr16(3)), rr);
             Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+            Program.Tick(3);
 
         }
 
         public static void LDsphl()
         {
             Registers.setr16(Registers.getr16(2), 3);
+            Program.Tick(2);
         }
 
         public static void ldann()
@@ -191,6 +171,7 @@ namespace Execution
             //load from address specified by 16 bit immediate into accumulator
             Registers.r8[7] = Memory.MemRead(nn);
             Registers.PC += 2;
+            Program.Tick(4);
         }
 
         public static void LDnna()
@@ -198,18 +179,21 @@ namespace Execution
             //load from accumulator into address specified by 16 bit immediate
             Memory.MemWrite(nn, Registers.r8[7]);
             Registers.PC += 2;
+            Program.Tick(4);
         }
 
         public static void LDHac()
         {
             //load from C + 0xFF into A??
             Registers.r8[7] = Memory.MemRead((ushort)(0xFF00 + Registers.r8[1]));
+            Program.Tick(2);
         }
 
         public static void LDHca()
         {
             //load from A into C + 0xFF00???
             Memory.MemWrite((ushort)(0xFF00 + Registers.r8[1]), Registers.r8[7]);
+            Program.Tick(2);
         }
 
         public static void LDHan()
@@ -217,6 +201,7 @@ namespace Execution
             //load into A from n + 0xFF00
             Registers.r8[7] = Memory.MemRead((ushort)(n + 0xFF00));
             Registers.PC++;
+            Program.Tick(3);
         }
 
         public static void LDHna()
@@ -224,6 +209,7 @@ namespace Execution
             //load from n + 0xFF00 into A
             Memory.MemWrite((ushort)(n + 0xFF00), Registers.r8[7]);
             Registers.PC++;
+            Program.Tick(3);
         }
 
         public static void ADD()
@@ -232,14 +218,17 @@ namespace Execution
             if (yRegisterIndex == 6 && (0b01000000 & instr) < 1)
             {
                 addvalue = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
             if ((0b01000000 & instr) > 1)
             {
                 addvalue = n;
                 Registers.PC++;
+                Program.Tick();
             }
             Registers.SetFlags8bAdd(Registers.r8[7], addvalue);
             Registers.r8[7] = (byte)(Registers.r8[7] + addvalue);
+            Program.Tick();
 
         }
         public static void AdjustedStack()
@@ -267,6 +256,7 @@ namespace Execution
 
 
             Registers.PC++;
+            Program.Tick(3);
         }
 
 
@@ -280,14 +270,17 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 addvalue = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
             if ((0b01000000 & instr) > 1)
             {
                 addvalue = n;
                 Registers.PC++;
+                Program.Tick();
             }
             Registers.SetFlags8bAdd(Registers.r8[7], addvalue, CarryFlag);
             Registers.r8[7] = (byte)(Registers.r8[7] + addvalue + CarryFlag);
+            Program.Tick();
         }
 
 
@@ -298,6 +291,7 @@ namespace Execution
             Registers.SetFlags8bAdd(Registers.r8[7], (byte)Registers.r8[yRegisterIndex], 0, "-");
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - Registers.r8[yRegisterIndex]);
+            Program.Tick();
         }
 
         public static void SUBhl()
@@ -307,6 +301,7 @@ namespace Execution
             Registers.SetFlags8bAdd(Registers.r8[7], (byte)Memory.MemRead(Registers.getr16(2)), 0, "-");
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - Memory.MemRead(Registers.getr16(2)));
+            Program.Tick(2);
         }
 
         public static void SUBn()
@@ -317,6 +312,7 @@ namespace Execution
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - n);
             Registers.PC++;
+            Program.Tick(2);
         }
 
         public static void SBC()
@@ -328,15 +324,18 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 subtractval = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
             if ((instr & 0b01000000) > 1)
             {
                 subtractval = n;
                 Registers.PC++;
+                Program.Tick();
             }
             Registers.SetFlags8bAdd(Registers.r8[7], (byte)subtractval, (byte)CarryFlag, "-");
             Registers.SetFlag("N", 1);
             Registers.r8[7] = (byte)(Registers.r8[7] - subtractval - CarryFlag);
+            Program.Tick();
         }
 
 
@@ -381,6 +380,7 @@ namespace Execution
             Registers.SetFlags8bAdd(Registers.r8[xRegisterIndex], 1);
             Registers.r8[xRegisterIndex] = (byte)(Registers.r8[xRegisterIndex] + 1);
             Registers.SetFlag("C", c);
+            Program.Tick();
 
         }
 
@@ -398,6 +398,7 @@ namespace Execution
             Registers.r8[xRegisterIndex] = (byte)(Registers.r8[xRegisterIndex] - 1);
             Registers.SetFlag("C", c);
             Registers.SetFlag("N", 1);
+            Program.Tick();
 
         }
 
@@ -411,6 +412,7 @@ namespace Execution
             Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) - 1));
             Registers.SetFlag("C", c);
             Registers.SetFlag("N", 1);
+            Program.Tick(2);
 
         }
 
@@ -422,24 +424,11 @@ namespace Execution
             Registers.SetFlags8bAdd(Memory.MemRead(Registers.getr16(2)), 1);
             Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) + 1));
             Registers.SetFlag("C", c);
+            Program.Tick(2);
 
         }
 
-        public static void INCI()
-        {
-            unchecked
-            {
 
-                //decrements data in R
-                //NOT OPCODED 0b00xxx101
-                int c = Registers.ReadFlag("C");
-                Registers.SetFlags8bAdd(Registers.r8[xRegisterIndex], (byte)-1);
-                Memory.MemWrite(Registers.getr16(2), (byte)(Registers.r8[xRegisterIndex] - 1));
-                Registers.SetFlag("N", 1);
-                Registers.SetFlag("C", c);
-            }
-
-        }
 
         public static void AND()
         {
@@ -450,12 +439,14 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 otherval = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
 
             if ((instr & 0b01000000) > 0)
             {
                 otherval = n;
                 Registers.PC++;
+                Program.Tick();
             }
 
             Registers.r8[7] &= otherval;
@@ -468,6 +459,7 @@ namespace Execution
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
 
         public static void OR()
@@ -479,12 +471,14 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 otherval = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
 
             if ((instr & 0b01000000) > 0)
             {
                 otherval = n;
                 Registers.PC++;
+                Program.Tick();
             }
 
             Registers.r8[7] |= otherval;
@@ -497,6 +491,7 @@ namespace Execution
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
         public static void XOR()
         {
@@ -507,12 +502,14 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 otherval = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
 
             if ((instr & 0b01000000) > 0)
             {
                 otherval = n;
                 Registers.PC++;
+                Program.Tick();
             }
 
             Registers.r8[7] ^= otherval;
@@ -525,6 +522,7 @@ namespace Execution
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
 
         public static void CCF()
@@ -533,6 +531,7 @@ namespace Execution
             Registers.SetFlag("C", 1 - Registers.ReadFlag("C"));
             Registers.SetFlag("N", 0);
             Registers.SetFlag("H", 0);
+            Program.Tick();
         }
 
         public static void SCF()
@@ -541,6 +540,7 @@ namespace Execution
             Registers.SetFlag("C", 1);
             Registers.SetFlag("N", 0);
             Registers.SetFlag("H", 0);
+            Program.Tick();
         }
 
         public static void DAA()
@@ -578,6 +578,7 @@ namespace Execution
             else Registers.SetFlag("Z", 0);
             Registers.SetFlag("H", 0);
             Registers.SetFlag("C", (byte)c);
+            Program.Tick();
 
         }
 
@@ -587,6 +588,7 @@ namespace Execution
             Registers.r8[7] = (byte)~Registers.r8[7];
             Registers.SetFlag("N", 1);
             Registers.SetFlag("H", 1);
+            Program.Tick();
         }
 
         public static void INCrr()
@@ -594,6 +596,7 @@ namespace Execution
             //increments the 16 bit register rr
             //NOT OPCODED 0b00xx0011
             Registers.setr16((ushort)(Registers.getr16(rrIndex) + 1), rrIndex);
+            Program.Tick(2);
         }
 
         public static void DECrr()
@@ -601,6 +604,7 @@ namespace Execution
             //decrements the 16 bit register rr
             //NOT OPCODED 0b00xx1011
             Registers.setr16((ushort)(Registers.getr16(rrIndex) - 1), rrIndex);
+            Program.Tick(2);
         }
 
         public static void ADDhlrr()
@@ -623,6 +627,7 @@ namespace Execution
             else Registers.SetFlag("H", 0);
 
             Registers.setr16((ushort)sum, 2);
+            Program.Tick(2);
         }
 
         public static void ADDspe()
@@ -650,6 +655,7 @@ namespace Execution
 
 
             Registers.PC++;
+            Program.Tick(4);
         }
 
 
@@ -669,7 +675,7 @@ namespace Execution
             if (rot == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
-
+            Program.Tick();
 
         }
 
@@ -684,6 +690,7 @@ namespace Execution
             {
                 Registers.SetFlag("Z", 0);
             }
+            Program.Tick();
         }
 
         public static void RLCref(ref byte rot)
@@ -702,6 +709,7 @@ namespace Execution
             if (rot == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
 
         public static void RLC()
@@ -715,6 +723,7 @@ namespace Execution
             {
                 Registers.SetFlag("Z", 0);
             }
+            Program.Tick();
         }
 
         public static void RRref(ref byte rot)
@@ -732,7 +741,7 @@ namespace Execution
             if (rot == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
-
+            Program.Tick();
 
         }
 
@@ -747,6 +756,7 @@ namespace Execution
             {
                 Registers.SetFlag("Z", 0);
             }
+            Program.Tick();
         }
 
         public static void RRCref(ref byte rot)
@@ -765,6 +775,7 @@ namespace Execution
             if (rot == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
 
         public static void RRC()
@@ -778,28 +789,33 @@ namespace Execution
             {
                 Registers.SetFlag("Z", 0);
             }
+            Program.Tick();
         }
 
         public static void JP()
         {
             Registers.PC += 2;
             Registers.PC = nn;
+            Program.Tick(4);
         }
 
         public static void JPhl()
         {
             Registers.PC = Registers.getr16(2);
+            Program.Tick(1);
         }
 
         public static void JRe()
         {
             Registers.PC++;
             Registers.PC = (ushort)(Registers.PC + e);
+            Program.Tick(3);
         }
 
         public static void DI()
         {
             Registers.IME = 0;
+            Program.Tick();
         }
 
         public static void JPccnn()
@@ -808,70 +824,87 @@ namespace Execution
             if (Registers.IfCondition(cc))
             {
                 Registers.PC = (ushort)(Registers.PC + e);
+                Program.Tick();
             }
+            Program.Tick(2);
         }
 
         public static void RET()
         {
             Registers.PC = Memory.MemRead16b(Registers.getr16(3));
             Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+            Program.Tick(4);
         }
         public static void RETi()
         {
             Registers.IME = 1;
             Registers.PC = Memory.MemRead16b(Registers.getr16(3));
             Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
+            Program.Tick(4);
 
         }
         public static void RETcc()
         {
+            //returns if condition cc is true
             if (Registers.IfCondition(cc))
             {
                 Registers.PC = Memory.MemRead16b(Registers.getr16(3));
                 Registers.setr16((ushort)(Registers.getr16(3) + 2), 3);
-
+                Program.Tick(3);
             }
+            Program.Tick(2);
 
         }
 
         public static void JPccnnreal()
         {
+            //jumps to nn if cc is true
             Registers.PC += 2;
             if (Registers.IfCondition(cc))
             {
                 Registers.PC = nn;
+                Program.Tick();
             }
+            Program.Tick(3);
         }
 
         public static void CALLnn()
         {
+            //Calls address nn
             Registers.PC += 2;
             Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
             Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
             Registers.PC = nn;
+            Program.Tick(6);
         }
 
         public static void CALLccnn()
         {
+            //Calls address nn if condition cc is true
             Registers.PC += 2;
             if (Registers.IfCondition(cc))
             {
                 Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
                 Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
                 Registers.PC = nn;
+                Program.Tick(3);
             }
+            Program.Tick(3);
         }
         public static void RST()
         {
-
+            //CALLs the address indicated by the instruction, multiplied by 8
             Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
             Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
             Registers.PC = (ushort)(xRegisterIndex * 8);
+            Program.Tick(4);
         }
 
         public static void EI()
         {
-            Registers.IME = 1;
+            //enables interrupts: NORMALLY WAITS A CYCLE (probably should fix that)
+            Registers.IMEpendingstate = 1;
+            Program.Tick();
         }
 
         public static void SWAPr()
@@ -888,6 +921,7 @@ namespace Execution
                 }
                 else Registers.SetFlag("Z", 0);
                 Memory.MemWrite(Registers.getr16(2), (byte)(((Memory.MemRead(Registers.getr16(2)) & 0x0F) << 4) + ((Memory.MemRead(Registers.getr16(2)) & 0xF0) >> 4)));
+                Program.Tick(4);
                 return;
             }
             if (Registers.r8[yRegisterIndex] == 0)
@@ -897,6 +931,7 @@ namespace Execution
             else Registers.SetFlag("Z", 0);
 
             Registers.r8[yRegisterIndex] = (byte)(((Registers.r8[yRegisterIndex] & 0x0F) << 4) + ((Registers.r8[yRegisterIndex] & 0xF0) >> 4));
+            Program.Tick(2);
         }
 
         public static void SRL()
@@ -929,6 +964,7 @@ namespace Execution
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
 
         public static void SLA()
@@ -962,6 +998,7 @@ namespace Execution
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
 
         }
 
@@ -997,6 +1034,7 @@ namespace Execution
                 Registers.SetFlag("Z", 1);
             }
             else Registers.SetFlag("Z", 0);
+            Program.Tick();
         }
 
         public static void BITur()
@@ -1005,6 +1043,7 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 CheckValue = Memory.MemRead(Registers.getr16(2));
+                Program.Tick();
             }
             Registers.SetFlag("N", 0);
             Registers.SetFlag("H", 1);
@@ -1013,6 +1052,7 @@ namespace Execution
             a = (byte)(a >> 7);
             a = (byte)(1 - a);
             Registers.SetFlag("Z", a);
+            Program.Tick();
         }
 
         public static void SETur()
@@ -1025,8 +1065,10 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) | bitmask));
+                Program.Tick();
             }
             else Registers.r8[yRegisterIndex] |= bitmask;
+            Program.Tick();
 
 
 
@@ -1041,8 +1083,10 @@ namespace Execution
             if (yRegisterIndex == 6)
             {
                 Memory.MemWrite(Registers.getr16(2), (byte)(Memory.MemRead(Registers.getr16(2)) & bitmask));
+                Program.Tick();
             }
             else Registers.r8[yRegisterIndex] &= bitmask;
+            Program.Tick();
 
         }
 

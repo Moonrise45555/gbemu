@@ -16,9 +16,121 @@ using System.ComponentModel;
 using QuickType;
 using Raylib_cs;
 using Rendering;
+using System.Collections;
+using Debug;
+
 
 public static class Program
 {
+
+    public static bool Halted = false;
+    public const long DMGFREQUENCY = 4194304;
+    static int AccumulatorDIV = 0;
+    static int AccumulatorTIMA = 0;
+
+    public static void Tick(int number = 1)
+    {
+        PPU.PassDots(number);
+
+
+
+
+        //////
+        //Timer stuff
+        //////
+
+
+        AccumulatorDIV += number;
+
+        //counts the "excess" number
+        if (AccumulatorDIV >= 64)
+        {
+            //if over T cycle number, increment timer and reset accumulator
+            AccumulatorDIV -= 64;
+            Memory.MemWrite(0xFF04, (byte)(Memory.MemRead(0xFF04) + 1));
+        }
+
+        //check if TIMA is enabled first
+        if ((Memory.MemRead(0xFF07) & 0b100) > 1)
+        {
+            //determines the frequency with which TIMA is meant to be incremented atm
+            int TIMAfrequency = 0;
+            switch (Memory.MemRead(0xFF07) & 0b11)
+            {
+                case 00:
+                    TIMAfrequency = 256;
+                    break;
+                case 0b01:
+                    TIMAfrequency = 4;
+                    break;
+                case 0b10:
+                    TIMAfrequency = 16;
+                    break;
+                case 0b11:
+                    TIMAfrequency = 64;
+                    break;
+            }
+
+            //increments TIMA if enough cycles have passed
+            AccumulatorTIMA += number;
+            if (AccumulatorTIMA >= TIMAfrequency)
+            {
+                //if overflow, reset to TMA and request interrupt
+                if (Memory.MemRead(0xFF05) == 255)
+                {
+
+                    //reset to TMA
+                    Memory.MemWrite(0xFF05, Memory.MemRead(0xFF06));
+
+                    //request timer interrupt
+                    Memory.MemWrite(0xFF0F, (byte)(Memory.MemRead(0xFF0F) | 0b100));
+
+                }
+                else Memory.MemWrite(0xFF05, (byte)(Memory.MemRead(0xFF05) + 1));
+                //if over T cycle number, increment timer and reset accumulator
+                AccumulatorTIMA -= TIMAfrequency;
+
+            }
+
+
+        }
+
+
+
+
+
+
+
+    }
+
+    static Sources[] sources = (Sources[])Enum.GetValues(typeof(Sources));
+    public static bool CheckInterrupts()
+    {
+        //loops through every interrupt and checks whether its getting called
+
+        foreach (Sources source in sources)
+        {
+            if (Interrupts.CheckInterruptValidRequest(source))
+            {
+                //disables interrupts
+                Registers.IME = 0;
+
+                //unrequestes the interrupt
+                Interrupts.SetInterruptRequest(source, 0);
+
+                //CALLs the interrupt handler
+                Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
+                Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
+
+                Registers.PC = Interrupts.InterruptHandler[source];
+
+
+                return true;
+            }
+        }
+        return false;
+
+    }
 
 
 
@@ -26,70 +138,99 @@ public static class Program
 
     static void Main(string[] args)
     {
-        Raylib.InitWindow(256, 256, "mario for thie wii?");
 
-        Registers.PC = 0x0;
+        Raylib.InitWindow(160 * 4, 144 * 4, "mario for thie wii?");
 
-        byte[] a = File.ReadAllBytes("../../../dmg0_boot.bin");
-        for (var i = 0; i < a.Length; i++)
+        Registers.PC = 0x000;
+
+
+        Memory.BootROM = File.ReadAllBytes("../../../dmg0_boot.bin");
+        Memory.ROM = File.ReadAllBytes("../../../sml.gb");
+
+        for (var i = 0; i < Memory.BootROM.Length; i++)
         {
-            Memory.RAM[i] = a[i];
+            Memory.RAM[i] = Memory.BootROM[i];
         }
+
+
+        for (var i = 0; i < Math.Min(0x8000, Memory.ROM.Length); i++)
+        {
+            if (i >= 0x100)
+            {
+                Memory.RAM[i] = Memory.ROM[i];
+            }
+
+        }
+        Memory.MBCType = Memory.MemRead(0x0147);
         long cycle = 0;
+        Registers.r8[7] = 0x01;
+        Registers.Flags = 0xB0;
+        Registers.r8[0] = 0;
+        Registers.r8[1] = 0x13;
+        Registers.r8[2] = 0;
+        Registers.setr16(0xFFFE, 3);
+        Registers.r8[3] = 0xD8;
+        Registers.r8[4] = 0x01;
+        Registers.r8[5] = 0x4D;
+
+        List<string> a = new List<string>();
         while (true)
         {
+
+
+
 
             if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.B))
             {
                 if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.C))
                 {
-                    for (var i = 0; i < (0x97FF - 0x8000); i++)
-                    {
-                        Console.Write(Memory.MemRead((ushort)(0x8000 + i)).ToString("X2") + " ");
-                        if (i % 0x10 == 0)
-                        {
-                            Console.WriteLine();
-                        }
+                    Dumping.DumpRange(0x8000, 0x97FF, "TILE DATA");
 
 
-
-
-
-                    }
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    throw new Exception();
                 }
-                for (var i = 0; i < (0x9bff - 0x9800); i++)
+                else
                 {
-                    Console.Write(Memory.MemRead((ushort)(0x9800 + i)).ToString("X2") + " ");
-                    if (i % 0x20 == 0)
-                    {
-                        Console.WriteLine();
-                    }
-
-
-
-
-
+                    Dumping.DumpRange(0x9800, 0x9bff, "TILE MAP");
                 }
-                Console.WriteLine();
-                Console.WriteLine();
-                Console.WriteLine();
+
                 throw new Exception();
             }
             cycle++;
+            if (cycle % 4000000 == 0)
+            {
+                Console.WriteLine(1 / Raylib.GetFrameTime());
+            }
+
 
 
             Execute(Registers.PC);
+            /* a.Add("A:" + Registers.r8[7].ToString("X2") + " F:" + Registers.Flags.ToString("X2") + " B:" + Registers.r8[0].ToString("X2") +
+             " C:" + Registers.r8[1].ToString("X2") + " D:" + Registers.r8[2].ToString("X2") + " E:" + Registers.r8[3].ToString("X2") +
+             " H:" + Registers.r8[4].ToString("X2") + " L:" + Registers.r8[5].ToString("X2") + " SP:" + Registers.getr16(3).ToString("X4") +
+             " PC:" + Registers.PC.ToString("X4") + " PCMEM:" + Memory.MemRead(Registers.PC).ToString("X2") + "," + Memory.MemRead((ushort)(Registers.PC + 1)).ToString("X2") + ","
+              + Memory.MemRead((ushort)(Registers.PC + 2)).ToString("X2") + "," + Memory.MemRead((ushort)(Registers.PC + 3)).ToString("X2"));*/
+            /* if (Raylib.IsKeyPressed(KeyboardKey.I))
+             {
 
-            if (cycle % 10000 == 0)
-            {
-                Console.WriteLine(Registers.PC.ToString("X4"));
-                PPU.RenderLoop();
 
-            }
+                 // Write the string array to a new file named "WriteLines.txt".
+                 using (StreamWriter outputFile = new StreamWriter("../thing.txt"))
+                 {
+                     foreach (string line in a)
+                         outputFile.WriteLine(line);
+                 }
+                 throw new Exception();
+             }*/
+
+            /* using (StreamWriter outputFile = new StreamWriter("../thing.txt"))
+             {
+                 foreach (string line in a)
+                     outputFile.WriteLine(line);
+             }
+             throw new Exception();*/
+
+
+
 
 
         }
@@ -103,27 +244,36 @@ public static class Program
     public static void Execute(ushort CrntPC)
     {
 
-        if (((Memory.MemRead(0xFF0F) & 1) == 1))
+
+        //does not execute anything if HALTed
+        if (Halted)
         {
-            Registers.IME = 0;
-            Memory.MemWrite(0xFF0F, (byte)(Memory.MemRead(0xFF0F) & 0xFE));
-
-            Registers.setr16((ushort)(Registers.getr16(3) - 2), 3);
-
-            Memory.MemWrite16b(Registers.getr16(3), Registers.PC);
-            CrntPC = 0x40;
-            Registers.PC = 0x40;
-
-
+            if ((Memory.MemRead(0xFFFF) & Memory.MemRead(0xFF0F)) == 0)
+            {
+                Tick();
+                return;
+            }
+            Halted = false;
         }
+        //handle the delaying behaviour of EI
+
+        Registers.IMECheck();
+
+
+        //jumps to interrupts if needed
+        if (CheckInterrupts())
+        {
+            CrntPC = Registers.PC;
+        }
+
+
+
 
         //fetch instruction from memory
         //increment Registers.PC by one
-        if (CrntPC == 0x0024)
-        {
 
-        }
         Registers.PC++;
+
         byte instr = Memory.MemRead(CrntPC);
         byte AdjInstruction = instr;
         Instructions.CBprefixed = false;
@@ -143,7 +293,11 @@ public static class Program
         Instructions.instr = AdjInstruction;
         Instructions.nn = (ushort)((Memory.MemRead((ushort)(CrntPC + 1))) | ((Memory.MemRead((ushort)(CrntPC + 2)) << 8)));
         Instructions.cc = Instructions.xRegisterIndex & 0b011;
-        //Console.WriteLine("executing " + instr.ToString("X4"));
+        if (Registers.PC > 568)
+        {
+
+        }
+
 
         switch (opcode)
         {
@@ -156,6 +310,9 @@ public static class Program
 
                 switch (instr)
                 {
+                    case 0:
+                        Instructions.NOP();
+                        break;
 
                     case 0b00000111:
                         //RLCA

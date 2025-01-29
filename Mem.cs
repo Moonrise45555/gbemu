@@ -1,13 +1,28 @@
+using Rendering;
+
 namespace EmuMemory
 {
     public static class Registers
     {
         public static byte IME = 0;
+        public static byte IMEpendingstate = 0;
         public static ushort PC;
         public static byte Flags = 0;
 
+
+        public static void IMECheck()
+        {
+            if (Registers.IMEpendingstate != 0)
+            {
+                Registers.IMEpendingstate = 0;
+                Registers.IME = 1;
+            }
+        }
+
+
         public static bool IfCondition(int ConditionIndex)
         {
+            //checks the condition indicated by the argument given, and returns true or false based on it
 
             switch (ConditionIndex)
             {
@@ -29,6 +44,7 @@ namespace EmuMemory
         }
         public static void SetFlags8bAdd(byte operand1, byte operand2, byte operand3 = 0, string SubMode = "+")
         {
+            //performs an 8 bit addition between the operands and sets flags based on it
 
 
             int a = (operand1 + operand2 + operand3);
@@ -62,6 +78,7 @@ namespace EmuMemory
         }
         public static void SetFlag(string flag, int value)
         {
+            //sets the flag indicated by the string to the value
             if (value != 0 && value != 1)
             {
 
@@ -93,6 +110,7 @@ namespace EmuMemory
 
         public static int ReadFlag(string flag)
         {
+            //returns the value of the flag
             switch (flag)
             {
                 case "Z":
@@ -119,7 +137,7 @@ namespace EmuMemory
         public static byte[] r8 = new byte[8];
         public static ushort getr16(int index)
         {
-
+            //returns the 16b register indicated by the argument
 
             ushort[] _r16 = new ushort[4];
             for (int i = 0; i < 3; i++)
@@ -134,6 +152,7 @@ namespace EmuMemory
 
         public static void setr16(ushort input, int index)
         {
+            //sets the 16b register indicated by the index to the 16 bit value argument given
 
 
             if (index > 3 || index < 0)
@@ -154,19 +173,110 @@ namespace EmuMemory
     }
     public static class Memory
     {
+        public static byte[] ROM = new byte[1];
+        public static byte[] BootROM = new byte[1];
+        public static int MBCType;
         public static Byte[] RAM = new byte[65536];
         public static void MemWrite16b(ushort address, ushort data)
         {
+            //writes a 16b number to the address in memory
             Memory.MemWrite(address, (byte)(data & 0x00FF));
             Memory.MemWrite((ushort)(address + 1), (byte)(data >> 8));
         }
+
+
+
+
         public static byte MemRead(ushort index)
         {
+            if (index == 0xFF00)
+            {
+                Input.GetInputs();
+            }
+
+
+
+
+            if (index >= 0xE000 && index <= 0xFDFF)
+            {
+                //redirect reads to echo ram
+                return RAM[index - 0xE000 + 0xC000];
+            }
+            //returns the value at a given address in memory
             return RAM[index];
+        }
+        public static void SwitchMB(int index)
+        {
+            if (index == 0)
+            {
+                index = 1;
+            }
+            for (var i = 0; i < 0x4000; i++)
+            {
+                RAM[0x4000 + i] = ROM[i + 0x4000 * index];
+            }
         }
 
         public static void MemWrite(ushort index, byte Data)
         {
+            if (index == 0xFF00)
+            {
+                byte val = (byte)(Data | 0b001111);
+
+                RAM[0xFF00] = val;
+                Input.GetInputs();
+                return;
+            }
+            //MBC stuff
+            if (index >= 0x0000 && index <= 0x7FFF)
+            {
+                //wrote into "ROM", handle based on MBCtype
+                switch (MBCType)
+                {
+                    case 0:
+                        //MBCtype 0 means no mbc, so we dont care about writes, nothing to do
+                        return;
+                    case 1:
+                        //MBCType 1 measn we actually have to care about stuff happening
+                        if (index >= 0x2000 && index <= 0x3FFF)
+                        {
+                            SwitchMB(Data & 0b11111);
+                            return;
+                        }
+                        //CHECK FOR ADDITIONAL RAM
+                        return;
+                }
+
+            }
+
+            if (index == 0xFF45 || index == 0xFF44 || index == 0xFF41)
+            {
+                PPU.STATupdate();
+            }
+            if (index == 0xFF50)
+            {
+                //unmaps boot rom
+                for (var i = 0; i < 0x100; i++)
+                {
+
+                    Memory.RAM[i] = Memory.ROM[i];
+
+
+                }
+            }
+
+            if (index == 0xFF02 && Data == 0x81)
+            {
+                //prints out anything sent to the serial port
+                Console.Write((char)RAM[0xFF01]);
+            }
+            if (index >= 0xE000 && index <= 0xFDFF)
+            {
+                //redirect writes to echo ram
+                RAM[index - 0xE000 + 0xC000] = Data;
+                return;
+            }
+            //writes the given data at the address in memory
             if (index == 0xFF46)
             {
                 OAMDMATransfer(Data);
@@ -176,15 +286,18 @@ namespace EmuMemory
 
         public static void OAMDMATransfer(byte source)
         {
+            //copies data from the given address to the object attribute memory
             for (var i = 0; i < 0xA0; i++)
             {
                 RAM[0xFE00 + i] = RAM[i + (source << 8)];
             }
+            Program.Tick(160);
         }
 
         public static ushort MemRead16b(ushort address)
         {
-            return (ushort)(RAM[address] + (RAM[address + 1] << 8));
+            //reads a 16b number from the address in memory
+            return (ushort)(RAM[address] + (RAM[(ushort)(address + 1)] << 8));
         }
     }
 

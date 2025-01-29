@@ -5,6 +5,7 @@ using EmuMemory;
 using System.Runtime.CompilerServices;
 using System.Numerics;
 using System.IO;
+using Raylib_cs;
 
 public static class Tests
 {
@@ -81,8 +82,9 @@ public static class Tests
                 if (b == 5)
                 {
 
-                    Console.WriteLine("F Difference: " + (Registers.Flags - (byte)item.Final.F));
-                    Console.WriteLine("nopüe");
+                    //Console.WriteLine("F Difference: " + (Registers.Flags - (byte)item.Final.F));
+                    //Console.WriteLine("nopüe");
+
                 }
 
 
