@@ -2,6 +2,7 @@ using Rendering;
 
 namespace EmuMemory
 {
+    //improvement ideas: flags as enums instead of strings?S
     public static class Registers
     {
         public static byte IME = 0;
@@ -12,6 +13,7 @@ namespace EmuMemory
 
         public static void IMECheck()
         {
+            //since EI is delayed by one instruction, the start of the decode cycle has to check for it somehow
             if (Registers.IMEpendingstate != 0)
             {
                 Registers.IMEpendingstate = 0;
@@ -52,6 +54,8 @@ namespace EmuMemory
             int abyte = 1;
             int ahalfadd = 1;
             int halfadd = (operand1 & 0x0F) + (operand2 & 0x0F) + (operand3 & 0x0F);
+
+            //subtraction makes the carry flags work slightly differently, which is why we need an extra option for it
             if (SubMode == "-")
             {
                 abyte = (operand1 - operand2 - operand3);
@@ -60,6 +64,7 @@ namespace EmuMemory
                 halfadd = 1;
 
             }
+
             if ((byte)a == 0 || (byte)abyte == 0)
                 Registers.SetFlag("Z", 1);
             else Registers.SetFlag("Z", 0);
@@ -138,14 +143,15 @@ namespace EmuMemory
         public static ushort getr16(int index)
         {
             //returns the 16b register indicated by the argument
+            //0 = BC, 1 = DE, 2 = HL, 3 = SP
 
-            ushort[] _r16 = new ushort[4];
-            for (int i = 0; i < 3; i++)
-            {
-                _r16[i] = (ushort)((r8[i * 2] << 8) + r8[i * 2 + 1]);
-            }
-            _r16[3] = SP;
-            return _r16[index];
+
+            //SP isnt constructed like the other 16b registers, therefore check for it individually 
+            if (index == 3) return SP;
+
+            //constructs 16b number from r8
+            else return (ushort)((r8[index * 2] << 8) + r8[index * 2 + 1]);
+
         }
 
 
@@ -189,6 +195,7 @@ namespace EmuMemory
 
         public static byte MemRead(ushort index)
         {
+            //if it tries to read the JOYP register, construct input stuff
             if (index == 0xFF00)
             {
                 Input.GetInputs();
@@ -207,6 +214,7 @@ namespace EmuMemory
         }
         public static void SwitchMB(int index)
         {
+            //loads a seperate range from ROM to RAM
             if (index == 0)
             {
                 index = 1;
@@ -221,13 +229,15 @@ namespace EmuMemory
         {
             if (index == 0xFF00)
             {
+                //if its a write to JOYP, only make bit 4 and 5 count
                 byte val = (byte)(Data | 0b001111);
 
                 RAM[0xFF00] = val;
-                Input.GetInputs();
+
                 return;
             }
-            //MBC stuff
+
+            //writes to ROM areas have to be handled based on the MBCtype
             if (index >= 0x0000 && index <= 0x7FFF)
             {
                 //wrote into "ROM", handle based on MBCtype
@@ -245,42 +255,47 @@ namespace EmuMemory
                         }
                         //CHECK FOR ADDITIONAL RAM
                         return;
+                    default:
+                        throw new Exception("dont know that MBCtype!");
                 }
 
             }
 
             if (index == 0xFF45 || index == 0xFF44 || index == 0xFF41)
             {
+                //writes to LY/LYC/STAT have to trigger STAT recalculation to make STAT up to date
                 PPU.STATupdate();
             }
-            if (index == 0xFF50)
+
+            //writes to the bank register 0xFF50 need to unmap the boot rom
+            if (index == 0xFF50 && Data == 1)
             {
-                //unmaps boot rom
                 for (var i = 0; i < 0x100; i++)
                 {
-
                     Memory.RAM[i] = Memory.ROM[i];
-
-
                 }
             }
 
             if (index == 0xFF02 && Data == 0x81)
             {
-                //prints out anything sent to the serial port
+                //prints out anything sent to the serial port, hack for cpu_instrs
                 Console.Write((char)RAM[0xFF01]);
             }
+
             if (index >= 0xE000 && index <= 0xFDFF)
             {
                 //redirect writes to echo ram
                 RAM[index - 0xE000 + 0xC000] = Data;
                 return;
             }
+
             //writes the given data at the address in memory
             if (index == 0xFF46)
             {
+                //if write to 0xFF46, start a DMA transfer 
                 OAMDMATransfer(Data);
             }
+
             RAM[index] = Data;
         }
 

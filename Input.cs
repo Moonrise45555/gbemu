@@ -24,6 +24,8 @@ namespace EmuMemory
             JOYP |= 0b1111;
             byte selectionMode = (byte)(JOYP >> 4);
 
+            //checks for every key press individually since the inbuilt GetKeyPress() Function did not seem to work correctly
+            //could potentially instead be a getter inside MemRead() returning the correct value every time JOYP is read...?
 
 
             if (selectionMode == 0b10 || selectionMode == 0b00)

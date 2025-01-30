@@ -103,12 +103,12 @@ public static class Program
 
     }
 
-    static Sources[] sources = (Sources[])Enum.GetValues(typeof(Sources));
+    static Sources[] PossibleSources = (Sources[])Enum.GetValues(typeof(Sources));
     public static bool CheckInterrupts()
     {
         //loops through every interrupt and checks whether its getting called
-
-        foreach (Sources source in sources)
+        //T: iterate through dict?
+        foreach (Sources source in PossibleSources)
         {
             if (Interrupts.CheckInterruptValidRequest(source))
             {
@@ -139,13 +139,20 @@ public static class Program
     static void Main(string[] args)
     {
 
+
+        Raylib.SetTraceLogLevel((TraceLogLevel)5);
+        Raylib.SetTargetFPS(60);
         Raylib.InitWindow(160 * 4, 144 * 4, "mario for thie wii?");
 
+        PPU.ii = Raylib.GenImageColor(160 * 4, 144 * 4, Color.White);
+
+        PPU.mn = Raylib.LoadTextureFromImage(PPU.ii);
         Registers.PC = 0x000;
 
 
         Memory.BootROM = File.ReadAllBytes("../../../dmg0_boot.bin");
-        Memory.ROM = File.ReadAllBytes("../../../sml.gb");
+        Memory.ROM = File.ReadAllBytes("../../../dmg-acid2.gb");
+
 
         for (var i = 0; i < Memory.BootROM.Length; i++)
         {
@@ -161,6 +168,7 @@ public static class Program
             }
 
         }
+
         Memory.MBCType = Memory.MemRead(0x0147);
         long cycle = 0;
         Registers.r8[7] = 0x01;
@@ -193,8 +201,9 @@ public static class Program
                     Dumping.DumpRange(0x9800, 0x9bff, "TILE MAP");
                 }
 
-                throw new Exception();
+                break;
             }
+
             cycle++;
             if (cycle % 4000000 == 0)
             {
@@ -203,37 +212,16 @@ public static class Program
 
 
 
+
             Execute(Registers.PC);
-            /* a.Add("A:" + Registers.r8[7].ToString("X2") + " F:" + Registers.Flags.ToString("X2") + " B:" + Registers.r8[0].ToString("X2") +
-             " C:" + Registers.r8[1].ToString("X2") + " D:" + Registers.r8[2].ToString("X2") + " E:" + Registers.r8[3].ToString("X2") +
-             " H:" + Registers.r8[4].ToString("X2") + " L:" + Registers.r8[5].ToString("X2") + " SP:" + Registers.getr16(3).ToString("X4") +
-             " PC:" + Registers.PC.ToString("X4") + " PCMEM:" + Memory.MemRead(Registers.PC).ToString("X2") + "," + Memory.MemRead((ushort)(Registers.PC + 1)).ToString("X2") + ","
-              + Memory.MemRead((ushort)(Registers.PC + 2)).ToString("X2") + "," + Memory.MemRead((ushort)(Registers.PC + 3)).ToString("X2"));*/
-            /* if (Raylib.IsKeyPressed(KeyboardKey.I))
-             {
 
-
-                 // Write the string array to a new file named "WriteLines.txt".
-                 using (StreamWriter outputFile = new StreamWriter("../thing.txt"))
-                 {
-                     foreach (string line in a)
-                         outputFile.WriteLine(line);
-                 }
-                 throw new Exception();
-             }*/
-
-            /* using (StreamWriter outputFile = new StreamWriter("../thing.txt"))
-             {
-                 foreach (string line in a)
-                     outputFile.WriteLine(line);
-             }
-             throw new Exception();*/
 
 
 
 
 
         }
+        Raylib.CloseWindow();
 
 
 
@@ -255,8 +243,8 @@ public static class Program
             }
             Halted = false;
         }
-        //handle the delaying behaviour of EI
 
+        //handle the delaying behaviour of EI
         Registers.IMECheck();
 
 
@@ -271,7 +259,7 @@ public static class Program
 
         //fetch instruction from memory
         //increment Registers.PC by one
-
+        //T: crntpc remove
         Registers.PC++;
 
         byte instr = Memory.MemRead(CrntPC);
@@ -282,6 +270,7 @@ public static class Program
             Instructions.CBprefixed = true;
             AdjInstruction = Memory.MemRead((ushort)(CrntPC + 1));
         }
+
         int opcode = (0b11000000 & instr) >> 6;
         Instructions.yRegisterIndex = 0b00000111 & AdjInstruction;
         Instructions.xRegisterIndex = (0b00111000 & AdjInstruction) >> 3;
@@ -293,10 +282,7 @@ public static class Program
         Instructions.instr = AdjInstruction;
         Instructions.nn = (ushort)((Memory.MemRead((ushort)(CrntPC + 1))) | ((Memory.MemRead((ushort)(CrntPC + 2)) << 8)));
         Instructions.cc = Instructions.xRegisterIndex & 0b011;
-        if (Registers.PC > 568)
-        {
 
-        }
 
 
         switch (opcode)
@@ -427,6 +413,7 @@ public static class Program
                             Instructions.LDHna();
                         }
                         else
+                        //T: ..
                         if (instr != 0b11101000 && instr != 0b11110000 && instr != 0b1111001 && instr != 0b11110010 && instr != 0b11111000)
                             Instructions.RETcc();
                         break;

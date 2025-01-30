@@ -96,7 +96,7 @@ namespace Execution
                 return;
             }
             Registers.r8[xRegisterIndex] = n;
-            Program.Tick(2);
+
             Registers.PC++;
             Program.Tick(2);
         }
@@ -132,7 +132,7 @@ namespace Execution
             if (rr == 3)
             {
                 Memory.MemWrite((ushort)(Registers.getr16(3) + 1), Registers.r8[7]);
-                Memory.MemWrite((ushort)(Registers.getr16(3)), Registers.Flags);
+                Memory.MemWrite(Registers.getr16(3), Registers.Flags);
             }
             else
                 Memory.MemWrite16b(Registers.getr16(3), Registers.getr16(rr));
@@ -545,8 +545,8 @@ namespace Execution
 
         public static void DAA()
         {
-            //DAA
-            //BROKEN
+            // DAA
+
             int c = 0;
             int offset = 0;
 
