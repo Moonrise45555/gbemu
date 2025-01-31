@@ -177,7 +177,7 @@ public static class Program
         }
 
         Memory.MBCType = Memory.MemRead(0x0147);
-        if (args[1] == "-d")
+        if (args[0] == "-d")
         {
             Console.WriteLine("MBCType: " + Memory.MBCType);
             DEBUG = true;
