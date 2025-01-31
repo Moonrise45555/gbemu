@@ -179,9 +179,12 @@ namespace EmuMemory
     }
     public static class Memory
     {
+        public static int BankingMode;
         public static byte[] ROM = new byte[1];
         public static byte[] BootROM = new byte[1];
         public static int MBCType;
+
+        public static int RAMBankNum;
         public static Byte[] RAM = new byte[65536];
         public static void MemWrite16b(ushort address, ushort data)
         {
@@ -246,17 +249,27 @@ namespace EmuMemory
                     case 0:
                         //MBCtype 0 means no mbc, so we dont care about writes, nothing to do
                         return;
-                    case 1:
+                    default:
+
                         //MBCType 1 measn we actually have to care about stuff happening
                         if (index >= 0x2000 && index <= 0x3FFF)
                         {
-                            SwitchMB(Data & 0b11111);
+                            SwitchMB(Data & 0b11111 + BankingMode * (RAMBankNum));
                             return;
+                        }
+                        if (index >= 0x6000 && index <= 0x7FFF)
+                        {
+                            BankingMode = Data & 1;
+                        }
+                        if (index >= 0x4000 && index <= 0x5FFF)
+                        {
+                            RAMBankNum = Data & 0b11;
                         }
                         //CHECK FOR ADDITIONAL RAM
                         return;
-                    default:
-                        throw new Exception("dont know that MBCtype!");
+
+
+                        //throw new Exception("dont know that MBCtype!");
                 }
 
             }

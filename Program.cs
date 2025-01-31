@@ -22,6 +22,7 @@ using Debug;
 
 public static class Program
 {
+    public static bool DEBUG;
 
     public static bool Halted = false;
     public const long DMGFREQUENCY = 4194304;
@@ -140,9 +141,10 @@ public static class Program
     {
 
 
+
         Raylib.SetTraceLogLevel((TraceLogLevel)5);
         Raylib.SetTargetFPS(60);
-        Raylib.InitWindow(160 * 4, 144 * 4, "mario for thie wii?");
+        Raylib.InitWindow(160 * 4, 144 * 4, "Andromeda");
 
         PPU.ii = Raylib.GenImageColor(160 * 4, 144 * 4, Color.White);
 
@@ -150,8 +152,13 @@ public static class Program
         Registers.PC = 0x000;
 
 
-        Memory.BootROM = File.ReadAllBytes("../../../dmg0_boot.bin");
-        Memory.ROM = File.ReadAllBytes("../../../dmg-acid2.gb");
+
+
+        Memory.BootROM = File.ReadAllBytes(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "/boot.bin");
+        Memory.ROM = File.ReadAllBytes(args[0]);
+
+
+
 
 
         for (var i = 0; i < Memory.BootROM.Length; i++)
@@ -170,6 +177,11 @@ public static class Program
         }
 
         Memory.MBCType = Memory.MemRead(0x0147);
+        if (args[1] == "-d")
+        {
+            Console.WriteLine("MBCType: " + Memory.MBCType);
+            DEBUG = true;
+        }
         long cycle = 0;
         Registers.r8[7] = 0x01;
         Registers.Flags = 0xB0;
@@ -188,7 +200,7 @@ public static class Program
 
 
 
-            if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.B))
+            if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.B) && DEBUG)
             {
                 if (Raylib.IsKeyDown(Raylib_cs.KeyboardKey.C))
                 {
@@ -207,13 +219,17 @@ public static class Program
             cycle++;
             if (cycle % 4000000 == 0)
             {
-                Console.WriteLine(1 / Raylib.GetFrameTime());
+                // Console.WriteLine(1 / Raylib.GetFrameTime());
             }
 
 
 
 
             Execute(Registers.PC);
+            if (Registers.PC > 0x100)
+            {
+
+            }
 
 
 
@@ -221,7 +237,8 @@ public static class Program
 
 
         }
-        Raylib.CloseWindow();
+
+
 
 
 
@@ -281,6 +298,8 @@ public static class Program
         Instructions.e = (sbyte)Instructions.n;
         Instructions.instr = AdjInstruction;
         Instructions.nn = (ushort)((Memory.MemRead((ushort)(CrntPC + 1))) | ((Memory.MemRead((ushort)(CrntPC + 2)) << 8)));
+        //if (Registers.PC > 0x100)
+        //Console.WriteLine(Registers.PC);
         Instructions.cc = Instructions.xRegisterIndex & 0b011;
 
 

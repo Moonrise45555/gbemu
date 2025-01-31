@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
+using System.Xml;
 namespace Rendering
 {
     static class PPU
@@ -145,11 +146,11 @@ namespace Rendering
 
         public static void PassDots(int dots)
         {
-
             if (Raylib.WindowShouldClose())
             {
                 Raylib.CloseWindow();
             }
+
             switch (crntMode)
             {
                 case 2:
@@ -290,127 +291,11 @@ namespace Rendering
             }
         }
 
-        public static void RenderLine(int line)
-        {
-            //Stopwatch sw = new Stopwatch();
-            //checks if LCD is enabled at all
-            //sw.Start();
-            if ((LCDC & 0b10000000) > 0)
-            {
-                //checks for bg and window enable
-                if ((LCDC & 1) > 0)
-                {
-                    //var a = sw.Elapsed;
-                    BGRender(line);
-                    //Console.WriteLine("BGRender: " + (sw.Elapsed - a));
-                    //checks for window enable
-                    if ((LCDC & 0b00100000) > 0)
-                    {
-                        WindowRender(line);
-                    }
-                }
-                else Raylib.ClearBackground(Color.White);
-
-                //checks for obj enable
-                if ((LCDC & 0b10) > 0)
-                {
-                    //var a = sw.Elapsed;
-                    OBJRender(line);
-                    // Console.WriteLine("OBJ: " + (sw.Elapsed - a));
-                }
-                //sw.Stop();
-                //Console.WriteLine("total: " + sw.Elapsed);
-                //Raylib.DrawText((1 / Raylib.GetFrameTime()).ToString(), 0, 30, 30, Color.Blue);
-
-
-
-
-            }
-
-        }
-
-        public static void WindowRender(int line)
-        {
-
-            //sets which tilemap the window uses
-            int MapOffset = 0x9800;
-            if ((LCDC & 0b01000000) > 0)
-            {
-                MapOffset = 0x9C00;
-            }
-
-            byte WY = Memory.MemRead(0xFF4A);
-            byte WX = Memory.MemRead(0xFF4B);
-
-
-
-
-
-
-
-
-            for (var PX = 0; PX < 160; PX++)
-            {
-                if (PX >= WX - 7 && line >= WY)
-                {
-                    //P coordinates are the corrdinates of the pixel on the screen
-                    //SC coordinates is the scrolling variable
-                    //TP coordinates are the coordinates of the pixel in the greater 256x256 pixel map
-                    byte TPX = (byte)(PX - (WX - 7));
-                    byte TPY = (byte)(WILC - 1);
-
-                    //Tile Coordinates are the coordinates of the tile in the 32x32 tilemap
-                    byte TileX = (byte)(TPX / 8);
-                    byte TileY = (byte)(TPY / 8);
-
-
-                    //InTile Coordinates are the coordinates of the pixel within the 8x8 tile its part of
-                    byte InTileX = (byte)(TPX % 8);
-                    byte InTileY = (byte)(TPY % 8);
-                    byte TileIndex = 255;
-                    TileIndex = Memory.MemRead((ushort)(MapOffset + TileX + TileY * 32));
-
-                    //TileIndex is the index the tile data has inside the tile data area
-
-
-
-
-
-
-
-                    //make sure we pull the tile data from the correct places in memory
-                    if (AddressingMode == 1)
-                    {
-                        DrawPixelInTile(PX, line, InTileX, InTileY, (ushort)(0x8000 + TileIndex * 16), Memory.MemRead(0xFF47));
-
-                    }
-
-                    else if (AddressingMode == 0)
-                    {
-                        DrawPixelInTile(PX, line, InTileX, InTileY, (ushort)(0x9000 + (sbyte)TileIndex * 16), Memory.MemRead(0xFF47));
-
-                    }
-
-                    else throw new Exception("addressingmode was somehow neither 0 nor 1???");
-
-
-                    continue;
-                }
-
-
-            }
-        }
-
-        public static void OBJRender(int line)
+        public static Byte[][] GetPossibleOBJs(int line)
         {
             int OBJSize = (1 + ((LCDC & 0b100) >> 2)) * 8;
-
-            if (OBJSize != 8 && OBJSize != 16)
-            {
-                throw new Exception();
-            }
-            ushort ObjTileDataOffset = 0x8000;
             ushort OAMOffset = 0xFE00;
+            int CCCount = 0;
             List<Byte[]> PossibleObjs = new List<byte[]>();
 
             for (var ObjIndex = 0; ObjIndex < 40; ObjIndex++)
@@ -419,7 +304,7 @@ namespace Rendering
                 byte[] ObjData = new byte[4];
 
                 //enforce 10 obj per scanline limit
-                if (PossibleObjs.Count == 10)
+                if (CCCount == 10)
                 {
                     break;
                 }
@@ -436,96 +321,119 @@ namespace Rendering
                 //Y pos check: if outside of bounds, dont even consider it
                 if (ObjData[0] - 16 <= line && line - (ObjData[0] - 16) < OBJSize)
                 {
-                    PossibleObjs.Add(ObjData);
 
+                    PossibleObjs.Add(ObjData);
+                    CCCount++;
                 }
             }
-            for (var PX = 0; PX < 160; PX++)
+            return PossibleObjs.ToArray();
+        }
+
+        public static bool ColorsEqual(Color a, Color b)
+        {
+
+            return a.A == b.A && a.B == b.B && a.G == b.G && a.R == b.R;
+        }
+
+        public static void RenderLine(int line)
+        {
+
+            byte[][] Candidates = GetPossibleOBJs(line);
+
+
+
+            bool LCDEnabled = (LCDC & 0b10000000) > 0;
+            bool BGPriorityEnable = (LCDC & 1) > 0;
+            bool WindowEnable = (LCDC & 0b00100000) > 0;
+            bool OBJEnable = (LCDC & 0b10) > 0;
+            Color OBJ = Color.Gold;
+            Color BG = Color.Gold;
+            Color Window = Color.Gold;
+            Color BGNT = Color.Gold;
+            //checks if LCD is enabled at all
+            for (var X = 0; X < 160; X++)
             {
-                //loops through all pixels on the line, checks every object if they overlap the pixel, if yes draw it
-                for (var ObjIndexP = 0; ObjIndexP < PossibleObjs.Count; ObjIndexP++)
+                Color PxlColor = Color.White;
+
+
+                if (LCDEnabled)
                 {
-                    var ObjIndex = PossibleObjs.Count - ObjIndexP - 1;
-                    byte[] ObjData = new byte[4];
-                    ObjData = PossibleObjs[ObjIndex];
-                    //x check
-                    if (ObjData[1] - 8 <= PX && PX - (ObjData[1] - 8) < 8)
+
+                    //checks for bg and window enable
+                    if (BGPriorityEnable)
                     {
-                        //gets the palette the object uses
-                        ushort Palette = Memory.MemRead((ushort)(((ObjData[3] & 0b00010000) >> 4) + 0xFF48));
 
-                        //get position of the pixel in relation to the object
-                        byte InObjX = (byte)(PX - (ObjData[1] - 8));
-                        byte InObjY = (byte)(line - (ObjData[0] - 16));
+                        BGNT = BGRender(X, line, false);
+                        BG = BGRender(X, line, true);
 
-                        if (InObjX > 7 || InObjY > 15)
+
+                        //checks for window enable
+                        if (WindowEnable)
                         {
-                            throw new Exception();
-                        }
-
-                        //get position of the pixel in relation to the top left of the tile
-                        byte InTileX = InObjX;
-                        if ((ObjData[3] & 0b100000) > 0)
-                        {
-                            InTileX = (byte)(7 - InTileX);
-                        }
-                        byte InTileY = InObjY;
-
-                        //handle large objects
-                        byte TileNum = 0;
-                        if (InObjY > 7)
-                        {
-                            TileNum = 1;
-                            InTileY -= 8;
-                        }
-
-                        if ((ObjData[3] & 0b1000000) > 0)
-                        {
-                            if (OBJSize == 16)
-                            {
-                                TileNum = (byte)(1 - TileNum);
-                            }
-                            InTileY = (byte)(7 - InTileY);
+                            Window = WindowRender(X, line);
 
                         }
-
-                        //if big size, ignore 0 bit of the index
-                        if (OBJSize == 16)
-                        {
-                            ObjData[2] &= 0b11111110;
-                        }
-                        DrawPixelInTile(PX, line, InTileX, InTileY, (ushort)(ObjTileDataOffset + (ObjData[2] * 16) + TileNum * 16), (byte)Palette, true);
+                    }
 
 
+                    if (OBJEnable)
+                    {
+                        OBJ = OBJRender(X, line, Candidates);
+                        if (!ColorsEqual(OBJ, Color.Gold)) PxlColor = OBJ;
+                    }
+
+                    if (!ColorsEqual(BGNT, Color.Gold)) PxlColor = BGNT;
+                    if (BGOverOBJ)
+                    {
+                        if (!ColorsEqual(OBJ, Color.Gold)) PxlColor = OBJ;
+                    }
+                    if (!ColorsEqual(BG, Color.Gold)) PxlColor = BG;
+                    if (!ColorsEqual(Window, Color.Gold)) PxlColor = Window;
+                    if (!BGOverOBJ)
+                    {
+                        if (!ColorsEqual(OBJ, Color.Gold)) PxlColor = OBJ;
                     }
 
 
 
 
 
+
+                    Raylib.ImageDrawRectangle(ref ii, X * 4, line * 4, 4, 4, PxlColor);
+
+
+
+
+
                 }
+
+
             }
+
         }
 
-        public static void BGRender(int line)
+        public static Color WindowRender(int PX, int line)
         {
 
-            byte SCY = Memory.MemRead(0xFF42);
-            byte SCX = Memory.MemRead(0xFF43);
-            byte PY = (byte)line;
 
-
-
-
-
-            for (var PX = 0; PX < 160; PX++)
+            //sets which tilemap the window uses
+            int MapOffset = 0x9800;
+            if ((LCDC & 0b01000000) > 0)
             {
+                MapOffset = 0x9C00;
+            }
 
+            byte WY = Memory.MemRead(0xFF4A);
+            byte WX = Memory.MemRead(0xFF4B);
+
+
+            if (PX >= WX - 7 && line >= WY)
+            {
                 //P coordinates are the corrdinates of the pixel on the screen
                 //SC coordinates is the scrolling variable
                 //TP coordinates are the coordinates of the pixel in the greater 256x256 pixel map
-                byte TPX = (byte)(PX + SCX);
-                byte TPY = (byte)(PY + SCY);
+                byte TPX = (byte)(PX - (WX - 7));
+                byte TPY = (byte)(WILC - 1);
 
                 //Tile Coordinates are the coordinates of the tile in the 32x32 tilemap
                 byte TileX = (byte)(TPX / 8);
@@ -536,11 +444,7 @@ namespace Rendering
                 byte InTileX = (byte)(TPX % 8);
                 byte InTileY = (byte)(TPY % 8);
                 byte TileIndex = 255;
-                if (LCDC3 == 0)
-                {
-                    TileIndex = Memory.MemRead((ushort)(0x9800 + TileX + TileY * 32));
-                }
-                else TileIndex = Memory.MemRead((ushort)(0x9C00 + TileX + TileY * 32));
+                TileIndex = Memory.MemRead((ushort)(MapOffset + TileX + TileY * 32));
 
                 //TileIndex is the index the tile data has inside the tile data area
 
@@ -553,28 +457,223 @@ namespace Rendering
                 //make sure we pull the tile data from the correct places in memory
                 if (AddressingMode == 1)
                 {
-                    DrawPixelInTile(PX, PY, InTileX, InTileY, (ushort)(0x8000 + TileIndex * 16), Memory.MemRead(0xFF47), false);
+                    return GetColorPixelInTile(PX, line, InTileX, InTileY, (ushort)(0x8000 + TileIndex * 16), Memory.MemRead(0xFF47), true);
 
                 }
 
                 else if (AddressingMode == 0)
                 {
-                    DrawPixelInTile(PX, PY, InTileX, InTileY, (ushort)(0x9000 + (sbyte)TileIndex * 16), Memory.MemRead(0xFF47), false);
+                    return GetColorPixelInTile(PX, line, InTileX, InTileY, (ushort)(0x9000 + (sbyte)TileIndex * 16), Memory.MemRead(0xFF47), true);
 
                 }
 
                 else throw new Exception("addressingmode was somehow neither 0 nor 1???");
 
 
-                continue;
+
 
             }
+            return Color.Gold;
 
 
 
         }
 
-        public static void DrawPixelInTile(int PX, int PY, int InTileX, int InTileY, ushort TileAddress, byte Palette, bool TransparentZero = false)
+        public static int ComputePriority(Byte[] Object, int ArrayIndex)
+        {
+            int Priority = 0;
+
+            //checks if it should be displayed behind the background, technically not needed...?
+            if ((Object[3] & 0b10000000) == 0)
+            {
+                Priority += 10000000;
+            }
+
+            //X Pos
+            Priority -= Object[1] * 1000;
+
+            //OAM location
+            Priority -= ArrayIndex;
+
+
+            return Priority;
+
+
+        }
+
+        public static int[] SortCandidates(ref Byte[][] Candidates)
+        {
+            //sorts objects based on their priority, higher priority objects having earlier places in the Array
+            //REFERENCE FUNCTION; USE WITH CARE
+
+
+
+
+
+
+
+
+            int[] Priorities = new int[Candidates.Length];
+            for (var i = 0; i < Candidates.Length; i++)
+            {
+                Priorities[i] = ComputePriority(Candidates[i], i);
+            }
+            int tempa;
+            byte[] tempb;
+            //sort priorites, and while doing so sort candidates too (done via bubblesort)
+
+            for (var num = 0; num < Priorities.Length; num++)
+            {
+                for (var i = 0; i < Priorities.Length - 1; i++)
+                {
+                    if (Priorities[i] < Priorities[i + 1])
+                    {
+                        tempa = Priorities[i + 1];
+                        Priorities[i + 1] = Priorities[i];
+                        Priorities[i] = tempa;
+
+                        tempb = Candidates[i + 1];
+                        Candidates[i + 1] = Candidates[i];
+                        Candidates[i] = tempb;
+                    }
+                }
+            }
+            return Priorities;
+        }
+
+        static bool BGOverOBJ;
+        public static Color OBJRender(int PX, int PY, Byte[][] Candidates)
+        {
+            SortCandidates(ref Candidates);
+
+
+            int OBJSize = (1 + ((LCDC & 0b100) >> 2)) * 8;
+            ushort ObjTileDataOffset = 0x8000;
+
+            //checks every object if they overlap the pixel, if yes draw it
+            for (var ObjIndex = 0; ObjIndex < Candidates.Length; ObjIndex++)
+            {
+
+                byte[] ObjData;
+                ObjData = Candidates[ObjIndex];
+                //x check
+                if (ObjData[1] - 8 <= PX && PX - (ObjData[1] - 8) < 8)
+                {
+                    //gets the palette the object uses
+                    ushort Palette = Memory.MemRead((ushort)(((ObjData[3] & 0b00010000) >> 4) + 0xFF48));
+
+                    //get position of the pixel in relation to the object
+                    byte InObjX = (byte)(PX - (ObjData[1] - 8));
+                    byte InObjY = (byte)(PY - (ObjData[0] - 16));
+
+                    if (InObjX > 7 || InObjY > 15)
+                    {
+                        throw new Exception();
+                    }
+
+                    //get position of the pixel in relation to the top left of the tile
+                    byte InTileX = InObjX;
+                    if ((ObjData[3] & 0b100000) > 0)
+                    {
+                        InTileX = (byte)(7 - InTileX);
+                    }
+                    byte InTileY = InObjY;
+
+                    //handle large objects
+                    byte TileNum = 0;
+                    if (InObjY > 7)
+                    {
+                        TileNum = 1;
+                        InTileY -= 8;
+                    }
+
+                    if ((ObjData[3] & 0b1000000) > 0)
+                    {
+                        if (OBJSize == 16)
+                        {
+                            TileNum = (byte)(1 - TileNum);
+                        }
+                        InTileY = (byte)(7 - InTileY);
+
+                    }
+
+                    //if big size, ignore 0 bit of the index
+                    if (OBJSize == 16)
+                    {
+                        ObjData[2] &= 0b11111110;
+                    }
+                    Color drawn = GetColorPixelInTile(PX, PY, InTileX, InTileY, (ushort)(ObjTileDataOffset + (ObjData[2] * 16) + TileNum * 16), (byte)Palette, true);
+                    if (!ColorsEqual(drawn, Color.Gold))
+                    {
+                        PPU.BGOverOBJ = (ObjData[3] & 0b10000000) > 0;
+                        return drawn;
+                    }
+
+
+
+
+
+
+                }
+
+
+
+
+
+
+
+            }
+            return Color.Gold;
+
+        }
+
+        public static Color BGRender(int PX, int line, bool transparentzer)
+        {
+
+            byte SCY = Memory.MemRead(0xFF42);
+            byte SCX = Memory.MemRead(0xFF43);
+            byte PY = (byte)line;
+
+            //P coordinates are the corrdinates of the pixel on the screen
+            //SC coordinates is the scrolling variable
+            //TP coordinates are the coordinates of the pixel in the greater 256x256 pixel map
+            byte TPX = (byte)(PX + SCX);
+            byte TPY = (byte)(PY + SCY);
+
+            //Tile Coordinates are the coordinates of the tile in the 32x32 tilemap
+            byte TileX = (byte)(TPX / 8);
+            byte TileY = (byte)(TPY / 8);
+
+
+            //InTile Coordinates are the coordinates of the pixel within the 8x8 tile its part of
+            byte InTileX = (byte)(TPX % 8);
+            byte InTileY = (byte)(TPY % 8);
+            byte TileIndex = 255;
+            if (LCDC3 == 0)
+            {
+                TileIndex = Memory.MemRead((ushort)(0x9800 + TileX + TileY * 32));
+            }
+            else TileIndex = Memory.MemRead((ushort)(0x9C00 + TileX + TileY * 32));
+
+            //TileIndex is the index the tile data has inside the tile data area
+
+            //make sure we pull the tile data from the correct places in memory
+            if (AddressingMode == 1)
+            {
+                return GetColorPixelInTile(PX, PY, InTileX, InTileY, (ushort)(0x8000 + TileIndex * 16), Memory.MemRead(0xFF47), transparentzer);
+
+            }
+            else if (AddressingMode == 0)
+            {
+                return GetColorPixelInTile(PX, PY, InTileX, InTileY, (ushort)(0x9000 + (sbyte)TileIndex * 16), Memory.MemRead(0xFF47), transparentzer);
+
+            }
+
+            else throw new Exception("addressingmode was somehow neither 0 nor 1???");
+
+        }
+
+        public static Color GetColorPixelInTile(int PX, int PY, int InTileX, int InTileY, ushort TileAddress, byte Palette, bool TransparentZero = false)
         {
             //TileData is the 16b tile data containing the color indexes
             byte[] TileData = new byte[16];
@@ -602,18 +701,19 @@ namespace Rendering
 
             if (ColorIndex == 0 && TransparentZero)
             {
-                return;
+                return Color.Gold;
             }
 
             //ColorNum contains the number form of the current color extracted from the pallete
             byte ColorNum = (byte)((Palette & (0b00000011 << (ColorIndex * 2))) >> (ColorIndex * 2));
 
             //switch statement through colornum to obtain the actual color in color form
-            Color PxlColor = Color.Blue;
+            Color PxlColor = Color.Gold;
             switch (ColorNum)
             {
                 case 00:
                     PxlColor = Color.White;
+
 
                     break;
                 case 01:
@@ -629,7 +729,8 @@ namespace Rendering
 
             //draw the actual pixel to the screen
             //Rectangle r = new Rectangle()
-            Raylib.ImageDrawRectangle(ref ii, PX * 4, PY * 4, 4, 4, PxlColor);
+
+            return PxlColor;
 
         }
     }
